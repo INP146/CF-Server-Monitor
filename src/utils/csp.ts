@@ -2,7 +2,6 @@ const TURNSTILE_DOMAIN = 'https://challenges.cloudflare.com';
 const INSIGHTS_DOMAIN = 'https://static.cloudflareinsights.com';
 const FONTS_API_DOMAIN = 'https://fonts.googleapis.com';
 const FONTS_STATIC_DOMAIN = 'https://fonts.gstatic.com';
-const RAW_GITHUB_DOMAIN = 'https://raw.githubusercontent.com';
 const DEFAULT_CONNECT_DOMAINS = [
   'https://api.iconify.design',
   'https://api.unisvg.com',
@@ -71,7 +70,7 @@ export function buildCspHeader({ staticDomains = [], apiDomains = [] }: {
     buildDirective('default-src', ["'self'"]),
     buildDirective('script-src', ["'self'", "'unsafe-inline'", TURNSTILE_DOMAIN, INSIGHTS_DOMAIN, ...staticDomains]),
     buildDirective('style-src', ["'self'", "'unsafe-inline'", TURNSTILE_DOMAIN, FONTS_API_DOMAIN, ...staticDomains]),
-    buildDirective('img-src', ["'self'", TURNSTILE_DOMAIN, RAW_GITHUB_DOMAIN, ...staticDomains, 'data:']),
+    buildDirective('img-src', ["'self'", TURNSTILE_DOMAIN, ...staticDomains, 'data:']),
     buildDirective('font-src', ["'self'", TURNSTILE_DOMAIN, FONTS_STATIC_DOMAIN, ...staticDomains]),
     buildDirective('connect-src', ["'self'", TURNSTILE_DOMAIN, INSIGHTS_DOMAIN, ...DEFAULT_CONNECT_DOMAINS, ...apiDomains]),
     buildDirective('frame-src', [TURNSTILE_DOMAIN]),

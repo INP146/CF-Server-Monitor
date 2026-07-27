@@ -34,13 +34,6 @@
           </div>
         </div>
 
-        <div class="form-row">
-          <div class="form-group flex-1">
-            <label class="form-label">{{ trans.themeOptions }}</label>
-            <textarea v-model="settings.theme_options" class="form-textarea" rows="5" placeholder='{"a":1,"b":2}'></textarea>
-            <p class="text-muted text-sm mt-1">{{ trans.themeOptionsTip }}</p>
-          </div>
-        </div>
       </div>
 
       <div class="settings-section" v-if="currentOrigin === selectedApiBase">

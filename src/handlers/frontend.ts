@@ -7,19 +7,8 @@ import {
   buildBackgroundStyle,
   stripCspMeta
 } from '../utils/csp.js';
-import { checkAuth } from '../middleware/auth.js';
-
-const THEME_CACHE_TTL = 3600;
-const PREVIEW_COOKIE = 'cfsm_theme_preview';
-const PREVIEW_AUTH_COOKIE = 'cfsm_theme_preview_auth';
 
 let filesCache: Record<string, string> | null = null;
-
-interface ParsedThemeUrl {
-  themeUrl: string;
-  rawBase: string;
-  cacheBase: string;
-}
 
 async function loadFrontendFiles(env: Env): Promise<Record<string, string>> {
   if (filesCache) return filesCache;
@@ -111,265 +100,9 @@ function injectAppearanceSettings(html: string, settings: SiteSettings): { html:
   };
 }
 
-function getContentType(path: string): string {
-  const cleanPath = String(path || '').split('?')[0].toLowerCase();
-  if (cleanPath.endsWith('.html')) return 'text/html;charset=UTF-8';
-  if (cleanPath.endsWith('.js') || cleanPath.endsWith('.mjs')) return 'application/javascript;charset=UTF-8';
-  if (cleanPath.endsWith('.css')) return 'text/css;charset=UTF-8';
-  if (cleanPath.endsWith('.json')) return 'application/json;charset=UTF-8';
-  if (cleanPath.endsWith('.svg')) return 'image/svg+xml';
-  if (cleanPath.endsWith('.png')) return 'image/png';
-  if (cleanPath.endsWith('.jpg') || cleanPath.endsWith('.jpeg')) return 'image/jpeg';
-  if (cleanPath.endsWith('.webp') || cleanPath.endsWith('.webpg')) return 'image/webp';
-  if (cleanPath.endsWith('.gif')) return 'image/gif';
-  if (cleanPath.endsWith('.ico')) return 'image/x-icon';
-  if (cleanPath.endsWith('.avif')) return 'image/avif';
-  if (cleanPath.endsWith('.woff')) return 'font/woff';
-  if (cleanPath.endsWith('.woff2')) return 'font/woff2';
-  if (cleanPath.endsWith('.ttf')) return 'font/ttf';
-  if (cleanPath.endsWith('.otf')) return 'font/otf';
-  if (cleanPath.endsWith('.map')) return 'application/json;charset=UTF-8';
-  return 'application/octet-stream';
-}
-
-function normalizeThemeUrl(value: unknown): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:' || url.hostname !== 'github.com') return '';
-    if (url.username || url.password || url.search || url.hash) return '';
-
-    const parts = url.pathname.split('/').filter(Boolean);
-    const ref = parts[3];
-    if (
-      parts.length < 4 ||
-      parts[2] !== 'tree' ||
-      !/^[A-Za-z0-9._-]+$/.test(parts[0]) ||
-      !/^[A-Za-z0-9._-]+$/.test(parts[1]) ||
-      !/^[A-Za-z0-9._-]+$/.test(ref) ||
-      parts.some(part => part === '.' || part === '..' || /[%\\]/.test(part))
-    ) {
-      return '';
-    }
-
-    return `https://github.com/${parts.join('/')}`;
-  } catch (_) {
-    return '';
-  }
-}
-
-function parseThemeUrl(themeUrl: unknown): ParsedThemeUrl | null {
-  const normalized = normalizeThemeUrl(themeUrl);
-  if (!normalized) return null;
-
-  const url = new URL(normalized);
-  const parts = url.pathname.split('/').filter(Boolean);
-  const owner = parts[0];
-  const repo = parts[1];
-  const ref = parts[3];
-  const themePathParts = parts.slice(4);
-  const encodedThemePath = [owner, repo, ref, ...themePathParts]
-    .map(part => encodeURIComponent(part))
-    .join('/');
-
-  return {
-    themeUrl: normalized,
-    rawBase: `https://raw.githubusercontent.com/${encodedThemePath}`,
-    cacheBase: `https://cfsm-theme-cache.local/${encodedThemePath}`
-  };
-}
-
-function getCookie(request: Request, name: string): string {
-  const cookie = request.headers.get('Cookie') || '';
-  for (const part of cookie.split(';')) {
-    const [key, ...valueParts] = part.trim().split('=');
-    if (key === name) {
-      return valueParts.join('=');
-    }
-  }
-  return '';
-}
-
-function getPreviewThemeUrlFromCookie(request: Request): string {
-  const value = getCookie(request, PREVIEW_COOKIE);
-  if (!value) return '';
-  try {
-    return normalizeThemeUrl(decodeURIComponent(value));
-  } catch (_) {
-    return '';
-  }
-}
-
-function buildPreviewCookie(request: Request, themeUrl: string): string {
-  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
-  return `${PREVIEW_COOKIE}=${encodeURIComponent(themeUrl)}; Max-Age=${THEME_CACHE_TTL}; Path=/; SameSite=Lax${secure}`;
-}
-
-function buildClearPreviewCookie(request: Request): string {
-  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
-  return `${PREVIEW_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
-}
-
-async function checkPreviewAuth(request: Request, env: Env, settings: SiteSettings): Promise<boolean> {
-  const token = getCookie(request, PREVIEW_AUTH_COOKIE);
-  if (!token) return false;
-
-  try {
-    const authRequest = {
-      headers: {
-        get: (key: string) => {
-          if (String(key).toLowerCase() === 'authorization') {
-            return `Bearer ${decodeURIComponent(token)}`;
-          }
-          return request.headers.get(key);
-        }
-      }
-    };
-    return await checkAuth(authRequest, env, settings);
-  } catch (_) {
-    return false;
-  }
-}
-
-function getPreviewThemeUrlFromQuery(url: URL): string {
-  if (!url.searchParams.has('theme_url')) return '';
-  return normalizeThemeUrl(url.searchParams.get('theme_url'));
-}
-
-function normalizeAssetPath(pathname: string): string {
-  const raw = pathname.slice('/assets/'.length);
-  if (!raw) return '';
-
-  try {
-    const decoded = decodeURIComponent(raw);
-    if (decoded.includes('\\')) return '';
-    const parts = decoded.split('/').filter(Boolean);
-    if (parts.length === 0 || parts.some(part => part === '.' || part === '..')) return '';
-    return parts.map(part => encodeURIComponent(part)).join('/');
-  } catch (_) {
-    return '';
-  }
-}
-
-function normalizeThemeAssetUrls(html: string): string {
-  return html.replace(/\b(src|href)=(["'])\.?\/?assets\//gi, '$1=$2/assets/');
-}
-
-function stripBrowserCacheHeaders(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.delete('Cache-Control');
-  headers.delete('CDN-Cache-Control');
-  headers.delete('Pragma');
-  headers.delete('Expires');
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers
-  });
-}
-
-async function fetchWithCache(
-  rawUrl: string,
-  contentType: string,
-  workerCacheUrl: string
-): Promise<Response> {
-  const cacheKey = new Request(workerCacheUrl || rawUrl, { method: 'GET' });
-  const cache = typeof caches !== 'undefined'
-    ? (caches as CacheStorage & { default: Cache }).default
-    : null;
-
-  if (cache) {
-    const cached = await cache.match(cacheKey);
-    if (cached) {
-      return stripBrowserCacheHeaders(cached);
-    }
-  }
-
-  const originResponse = await fetch(rawUrl, {
-    headers: { 'User-Agent': 'CFSM-Theme-Proxy' }
-  });
-
-  if (!originResponse.ok) {
-    return new Response('Theme file not found', {
-      status: originResponse.status,
-      headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
-    });
-  }
-
-  const headers = new Headers();
-  headers.set('Content-Type', contentType);
-  headers.set('Cache-Control', `public, max-age=${THEME_CACHE_TTL}`);
-  headers.set('CDN-Cache-Control', `public, max-age=${THEME_CACHE_TTL}`);
-  headers.set('X-Content-Type-Options', 'nosniff');
-
-  const etag = originResponse.headers.get('ETag');
-  if (etag) headers.set('ETag', etag);
-
-  const response = new Response(originResponse.body, {
-    status: 200,
-    headers
-  });
-
-  if (cache) {
-    await cache.put(cacheKey, response.clone()).catch(() => {});
-  }
-
-  return stripBrowserCacheHeaders(response);
-}
-
-async function serveThemeAsset(request: Request, themeUrl: string): Promise<Response> {
-  const parsedTheme = parseThemeUrl(themeUrl);
-  const url = new URL(request.url);
-  const assetPath = normalizeAssetPath(url.pathname);
-
-  if (!parsedTheme || !assetPath) {
-    return new Response('Not Found', {
-      status: 404,
-      headers: {
-        'Content-Type': 'text/plain;charset=UTF-8',
-        'X-CFSM-Theme-Asset': '1'
-      }
-    });
-  }
-
-  const contentType = getContentType(assetPath);
-  const response = await fetchWithCache(
-    `${parsedTheme.rawBase}/assets/${assetPath}`,
-    contentType,
-    `${parsedTheme.cacheBase}/assets/${assetPath}`
-  );
-  const headers = new Headers(response.headers);
-  headers.set('X-CFSM-Theme-Asset', '1');
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers
-  });
-}
-
-async function loadThemeIndex(themeUrl: string): Promise<string | null> {
-  const parsedTheme = parseThemeUrl(themeUrl);
-  if (!parsedTheme) return null;
-
-  const response = await fetchWithCache(
-    `${parsedTheme.rawBase}/index.html`,
-    'text/html;charset=UTF-8',
-    `${parsedTheme.cacheBase}/index.html`
-  );
-
-  if (!response.ok) return null;
-  return normalizeThemeAssetUrls(await response.text());
-}
-
 function buildHtmlResponse(
   html: string,
-  settings: SiteSettings,
-  request: Request,
-  previewThemeUrl = ''
+  settings: SiteSettings
 ): Response {
   const rendered = injectAppearanceSettings(html, settings);
   const headers = new Headers({
@@ -379,111 +112,22 @@ function buildHtmlResponse(
     'Content-Security-Policy': rendered.csp
   });
 
-  if (previewThemeUrl) {
-    headers.append('Set-Cookie', buildPreviewCookie(request, previewThemeUrl));
-  } else if (getPreviewThemeUrlFromCookie(request)) {
-    headers.append('Set-Cookie', buildClearPreviewCookie(request));
-  }
-
   return new Response(rendered.html, { headers });
 }
 
-function buildThemeIndexErrorResponse() {
-  return new Response('Theme index.html is unavailable', {
-    status: 502,
-    headers: {
-      'Content-Type': 'text/plain;charset=UTF-8',
-      'X-Content-Type-Options': 'nosniff'
-    }
-  });
-}
-
-function buildPreviewUnauthorizedResponse(request: Request, isAsset = false): Response {
-  const headers = new Headers({
-    'Content-Type': 'text/plain;charset=UTF-8',
-    'X-Content-Type-Options': 'nosniff',
-    'Set-Cookie': buildClearPreviewCookie(request)
-  });
-
-  if (isAsset) {
-    headers.set('X-CFSM-Theme-Asset', '1');
-  }
-
-  return new Response('Theme preview requires admin login', {
-    status: 401,
-    headers
-  });
-}
-
-function resolveThemeUrlForAsset(request: Request, settings: SiteSettings) {
-  const url = new URL(request.url);
-  const queryThemeUrl = getPreviewThemeUrlFromQuery(url);
-  if (queryThemeUrl) {
-    return { themeUrl: queryThemeUrl, preview: true };
-  }
-
-  const cookieThemeUrl = getPreviewThemeUrlFromCookie(request);
-  if (cookieThemeUrl) {
-    return { themeUrl: cookieThemeUrl, preview: true };
-  }
-
-  return {
-    themeUrl: normalizeThemeUrl(settings?.theme_url),
-    preview: false
-  };
-}
-
-function shouldUseBuiltinFrontend(path: string): boolean {
-  return path === '/admin' || path.startsWith('/admin/');
-}
-
 export async function serveFrontend(
-  request: Request,
   env: Env,
   settings: SiteSettings | null = null
 ): Promise<Response> {
-  const url = new URL(request.url);
-  const path = url.pathname;
-
   if (!settings) {
     settings = await loadSettings(env.DB);
-  }
-
-  if (request.method === 'GET' && path.startsWith('/assets/')) {
-    const resolvedTheme = resolveThemeUrlForAsset(request, settings);
-    if (!resolvedTheme.themeUrl) {
-      return new Response('Not Found', {
-        status: 404,
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' }
-      });
-    }
-    if (resolvedTheme.preview && !await checkPreviewAuth(request, env, settings)) {
-      return buildPreviewUnauthorizedResponse(request, true);
-    }
-    return serveThemeAsset(request, resolvedTheme.themeUrl);
-  }
-
-  const previewThemeUrl = getPreviewThemeUrlFromQuery(url);
-  const configuredThemeUrl = normalizeThemeUrl(settings.theme_url);
-  const effectiveThemeUrl = previewThemeUrl || configuredThemeUrl;
-
-  if (previewThemeUrl && !await checkPreviewAuth(request, env, settings)) {
-    return buildPreviewUnauthorizedResponse(request);
-  }
-
-  if (!shouldUseBuiltinFrontend(path) && effectiveThemeUrl) {
-    const themeHtml = await loadThemeIndex(effectiveThemeUrl);
-    if (themeHtml) {
-      return buildHtmlResponse(themeHtml, settings, request, previewThemeUrl);
-    }
-    return buildThemeIndexErrorResponse();
   }
 
   const files = await loadFrontendFiles(env);
   const html = files['dashboard.html'];
 
   if (html) {
-    return buildHtmlResponse(html, settings, request);
+    return buildHtmlResponse(html, settings);
   }
 
   return new Response('Frontend not available. Please build the frontend first with `npm run build:frontend`.', {

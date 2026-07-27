@@ -21,8 +21,6 @@ type PingNodeResult =
   | { valid: false; field: string; values?: never };
 
 const PING_NODE_FIELDS = ['custom_ct', 'custom_cu', 'custom_cm', 'custom_bd'];
-const THEME_PREVIEW_AUTH_COOKIE = 'cfsm_theme_preview_auth';
-const THEME_PREVIEW_AUTH_TTL = 600;
 
 function normalizeBooleanFlag(value: unknown): string {
   return value === true || value === 1 || value === '1' || value === 'true' ? '1' : '0';
@@ -96,94 +94,7 @@ function normalizePingNodeFields(source: AdminPayload, fields = PING_NODE_FIELDS
 }
 
 function hasAppearanceInput(settings: DataRecord): boolean {
-  if (settings.appearance_options !== undefined) return true;
-  return APPEARANCE_FIELDS
-    .filter(field => field !== 'theme_options')
-    .some(field => settings[field] !== undefined);
-}
-
-function extractBearerToken(request: Request): string {
-  const authHeader = request.headers.get('Authorization') || '';
-  const parts = authHeader.trim().split(/\s+/);
-  return parts[0] === 'Bearer' && parts[1] ? parts[1] : '';
-}
-
-function buildThemePreviewUrl(request: Request, themeUrl: string): string {
-  const previewUrl = new URL('/', request.url);
-  previewUrl.searchParams.set('theme_url', themeUrl);
-  return previewUrl.toString();
-}
-
-function buildThemePreviewAuthCookie(request: Request, token: string): string {
-  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
-  return `${THEME_PREVIEW_AUTH_COOKIE}=${encodeURIComponent(token)}; Max-Age=${THEME_PREVIEW_AUTH_TTL}; Path=/; HttpOnly; SameSite=Lax${secure}`;
-}
-
-function buildClearThemePreviewAuthCookie(request: Request): string {
-  const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
-  return `${THEME_PREVIEW_AUTH_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`;
-}
-
-function normalizeThemeUrl(value: unknown): string | null | undefined {
-  if (value === undefined) return undefined;
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  try {
-    const url = new URL(raw);
-    if (url.protocol !== 'https:') return null;
-    if (url.hostname !== 'github.com') return null;
-    if (url.username || url.password || url.search || url.hash) return null;
-
-    const parts = url.pathname.split('/').filter(Boolean);
-    const ref = parts[3];
-    if (
-      parts.length < 4 ||
-      parts[2] !== 'tree' ||
-      !/^[A-Za-z0-9._-]+$/.test(parts[0]) ||
-      !/^[A-Za-z0-9._-]+$/.test(parts[1]) ||
-      !/^[A-Za-z0-9._-]+$/.test(ref) ||
-      parts.some(part => part === '.' || part === '..' || /[%\\]/.test(part))
-    ) {
-      return null;
-    }
-
-    return `https://github.com/${parts.join('/')}`;
-  } catch (_) {
-    return null;
-  }
-}
-
-function getThemeRawIndexUrl(themeUrl: string): string {
-  const normalized = normalizeThemeUrl(themeUrl);
-  if (!normalized) return '';
-
-  const url = new URL(normalized);
-  const parts = url.pathname.split('/').filter(Boolean);
-  const owner = parts[0];
-  const repo = parts[1];
-  const ref = parts[3];
-  const themePath = [owner, repo, ref, ...parts.slice(4)]
-    .map(part => encodeURIComponent(part))
-    .join('/');
-  return `https://raw.githubusercontent.com/${themePath}/index.html`;
-}
-
-async function validateThemeUrlAvailable(themeUrl: string): Promise<boolean> {
-  if (!themeUrl) return true;
-
-  const rawIndexUrl = getThemeRawIndexUrl(themeUrl);
-  if (!rawIndexUrl) return false;
-
-  try {
-    const res = await fetch(rawIndexUrl, {
-      method: 'GET',
-      headers: { 'User-Agent': 'CFSM-Theme-Validate' }
-    });
-    return res.ok;
-  } catch (_) {
-    return false;
-  }
+  return APPEARANCE_FIELDS.some(field => settings[field] !== undefined);
 }
 
 async function deleteServer(db: D1Database, id: string): Promise<void> {
@@ -408,14 +319,6 @@ export async function handleAdminAPI(
       }
     }
 
-    if (data.action === 'clear_theme_preview_auth') {
-      return createSuccessResponse({
-        success: true
-      }, {
-        'Set-Cookie': buildClearThemePreviewAuthCookie(request)
-      });
-    }
-
     if (!await checkAuth(request, env, sys)) {
       return simpleAuthResponse();
     }
@@ -427,27 +330,6 @@ export async function handleAdminAPI(
         success: true,
         settings: safeSettings,
         api_secret: env.API_SECRET
-      });
-    }
-    else if (data.action === 'start_theme_preview') {
-      const normalizedThemeUrl = normalizeThemeUrl(data.theme_url);
-      if (!normalizedThemeUrl) {
-        return createBadRequestResponse('invalidThemeUrl');
-      }
-      if (!await validateThemeUrlAvailable(normalizedThemeUrl)) {
-        return createBadRequestResponse('invalidThemeUrl');
-      }
-
-      const token = extractBearerToken(request);
-      if (!token) {
-        return simpleAuthResponse();
-      }
-
-      return createSuccessResponse({
-        success: true,
-        preview_url: buildThemePreviewUrl(request, normalizedThemeUrl)
-      }, {
-        'Set-Cookie': buildThemePreviewAuthCookie(request, token)
       });
     }
     else if (data.action === 'list') {
@@ -558,13 +440,6 @@ export async function handleAdminAPI(
     }
     else if (data.action === 'save_settings') {
       const settings = isRecord(data.settings) ? data.settings : {};
-      const normalizedThemeUrl = normalizeThemeUrl(settings.theme_url);
-      if (normalizedThemeUrl === null) {
-        return createBadRequestResponse('invalidThemeUrl');
-      }
-      if (normalizedThemeUrl && !await validateThemeUrlAvailable(normalizedThemeUrl)) {
-        return createBadRequestResponse('invalidThemeUrl');
-      }
 
       // 如果 turnstile_enabled 或 turnstile_login_enabled 开启，验证 turnstile_site_key 和 turnstile_secret_key 都不为空
       if (settings.turnstile_enabled === 'true' || settings.turnstile_enabled === true || settings.turnstile_login_enabled === 'true' || settings.turnstile_login_enabled === true) {
@@ -589,34 +464,18 @@ export async function handleAdminAPI(
         return createBadRequestResponse('invalidPingNodeFormat');
       }
 
-      if (settings.appearance_options !== undefined && (
-        settings.appearance_options === null ||
-        typeof settings.appearance_options !== 'object' ||
-        Array.isArray(settings.appearance_options)
-      )) {
-        return createBadRequestResponse('invalidThemeOptionsFormat');
-      }
-
       const shouldSaveAppearanceOptions = hasAppearanceInput(settings);
       const appearanceOptions: AdminPayload = {};
 
       if (shouldSaveAppearanceOptions) {
-        const nestedAppearanceOptions = isRecord(settings.appearance_options)
-          ? settings.appearance_options
-          : {};
         for (const field of APPEARANCE_FIELDS) {
-          const value = field === 'theme_options' ? nestedAppearanceOptions.theme_options : settings[field];
+          const value = settings[field];
           if (value !== undefined) {
             // CSP 字段格式校验：只允许 https:// 开头的域名，逗号分隔
             if (field === 'csp_static' || field === 'csp_api') {
               appearanceOptions[field] = sanitizeCspDomains(value);
             } else if (field === 'display_mode') {
               appearanceOptions[field] = normalizeDisplayMode(value);
-            } else if (field === 'theme_options') {
-              if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-                return createBadRequestResponse('invalidThemeOptionsFormat');
-              }
-              appearanceOptions[field] = value;
             } else {
               appearanceOptions[field] = value;
             }
@@ -639,8 +498,6 @@ export async function handleAdminAPI(
             siteOptions[field] = pingNodes.values[field];
           } else if (field === 'tg_notify') {
             siteOptions[field] = tgNotify;
-          } else if (field === 'theme_url') {
-            siteOptions[field] = normalizedThemeUrl;
           } else {
             siteOptions[field] = settings[field];
           }

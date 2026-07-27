@@ -40,7 +40,7 @@ if (fs.existsSync(distDir)) {
   fs.removeSync(distDir);
 }
 
-console.log('Building theme frontend...');
+console.log('Building frontend...');
 execSync('npx vite build', { cwd: rootDir, stdio: 'inherit', env: { ...process.env, VITE_BASE: './' } });
 
 // 构建时注入配置到 HTML

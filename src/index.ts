@@ -5,7 +5,6 @@ import { handleAdminAPI } from './handlers/admin.js';
 import { serveFrontend } from './handlers/frontend.js';
 import { handleUpdate, handleWebSocketUpgrade } from './handlers/update.js';
 import { handleServerAPI, handleServersAPI } from './handlers/dashboard.js';
-import { handleTheme } from './handlers/theme.js';
 import { loadSettings, loadSiteSettings, loadAppearanceOptions, setDebug, debug, getCurrentVersion } from './utils/settings.js';
 import { checkAuth, simpleAuthResponse } from './middleware/auth.js';
 import { getServerDetail, getMetricsHistoryCache, setMetricsHistoryCache, getCacheDuration } from './utils/cache.js';
@@ -31,30 +30,6 @@ async function fetchStaticAsset(request: Request, env: Env, path: string): Promi
   } catch (_) {
     return null;
   }
-}
-
-function isAdminAssetReferrer(request: Request): boolean {
-  const referrer = request.headers.get('Referer') || request.headers.get('Referrer') || '';
-  if (!referrer) return false;
-
-  try {
-    const requestUrl = new URL(request.url);
-    const referrerUrl = new URL(referrer);
-    return referrerUrl.origin === requestUrl.origin &&
-      (referrerUrl.pathname === '/admin' || referrerUrl.pathname.startsWith('/admin/'));
-  } catch (_) {
-    return false;
-  }
-}
-
-function cleanThemeAssetResponse(response: Response): Response {
-  const headers = new Headers(response.headers);
-  headers.delete('X-CFSM-Theme-Asset');
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers
-  });
 }
 
 async function getEncryptionKey(env: Env, sys: SiteSettings | null): Promise<CryptoKey> {
@@ -220,23 +195,6 @@ export default {
       return Response.redirect(target.toString(), 302);
     }
 
-    if (method === 'GET' && path.startsWith('/assets/')) {
-      if (isAdminAssetReferrer(request)) {
-        const staticAssetResponse = await fetchStaticAsset(request, env, path);
-        if (staticAssetResponse) {
-          return applyCors(staticAssetResponse, request, corsAllowedOrigins);
-        }
-      }
-
-      try {
-        const themeAssetResponse = await serveFrontend(request, env, await loadSettings(env.DB));
-        if (themeAssetResponse.headers.get('X-CFSM-Theme-Asset') === '1') {
-          return applyCors(cleanThemeAssetResponse(themeAssetResponse), request, corsAllowedOrigins);
-        }
-      } catch (e) {
-      }
-    }
-
     if (env.ASSETS && method === 'GET') {
       const staticAssetResponse = await fetchStaticAsset(request, env, path);
       if (staticAssetResponse) {
@@ -349,15 +307,10 @@ export default {
           turnstile_site_key: settings.turnstile_site_key || '',
           site_title: appearanceOptions.site_title || '',
           display_mode: appearanceOptions.display_mode || 'bar',
-          theme_options: appearanceOptions.theme_options || {},
           verified: verified,
           turnstile_verified: turnstileVerified,
           show_long_history: settings.show_long_history === 'true'
         });
-      }},
-      { method: 'GET', path: '/theme', handler: async () => {
-        const themeStore = await handleTheme()
-        return createSuccessResponse(themeStore)
       }},
       { method: 'GET', path: '/api/server', handler: async () => {
         const settings = await ensureSiteSettings();
@@ -430,7 +383,7 @@ export default {
     }
 
     const fullSettings = await loadSettings(env.DB);
-    const frontendResponse = await serveFrontend(request, env, fullSettings);
+    const frontendResponse = await serveFrontend(env, fullSettings);
     return applyCors(frontendResponse, request, corsAllowedOrigins);
   },
 

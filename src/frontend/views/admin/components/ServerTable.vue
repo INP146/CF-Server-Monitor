@@ -67,13 +67,7 @@
                   <span class="flag-fallback">🏳️</span>
                   <OsIcon :os="server.os" />
                 </span>
-                <a
-                  v-if="themeUrl"
-                  :href="getPublicServerHref(server)"
-                  class="server-name-link"
-                >{{ server.name }}</a>
                 <router-link
-                  v-else
                   :to="getDefaultServerRoute(server)"
                   class="server-name-link"
                 >{{ server.name }}</router-link>
@@ -138,7 +132,6 @@ const props = defineProps({
   groups: { type: Array, default: () => ['Default'] },
   activeTab: { type: String, default: 'servers' },
   selectedApiIndex: { type: Number, default: 0 },
-  themeUrl: { type: String, default: '' },
   latestAgentVersion: { type: String, default: '' },
   copiedServerId: { type: [String, Number], default: null },
   copiedNoteServerId: { type: [String, Number], default: null }
@@ -183,5 +176,4 @@ const getAgentVersionClass = (version) => {
 }
 const getServerQuery = () => props.selectedApiIndex ? `?apiIndex=${props.selectedApiIndex}` : ''
 const getDefaultServerRoute = (server) => `/server/${server.id}${getServerQuery()}`
-const getPublicServerHref = (server) => `/#/server/${encodeURIComponent(server.id)}${getServerQuery()}`
 </script>

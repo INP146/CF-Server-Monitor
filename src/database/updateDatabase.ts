@@ -307,10 +307,23 @@ export async function cleanupStaleSettings(db: D1Database) {
     const { meta: cleanupResult } = await db.prepare(
       `DELETE FROM settings WHERE ${staleKeysWhere}`
     ).bind(...staleBindings).run();
-    if (cleanupResult.changes > 0) {
-      debug(`已清理 ${cleanupResult.changes} 个废弃的 settings key`);
+    const [siteOptionsCleanup, appearanceOptionsCleanup] = await db.batch([
+      db.prepare(`
+        UPDATE settings
+        SET value = json_remove(value, '$.theme_url')
+        WHERE key = 'site_options' AND json_valid(value) AND json_type(value, '$.theme_url') IS NOT NULL
+      `),
+      db.prepare(`
+        UPDATE settings
+        SET value = json_remove(value, '$.theme_options')
+        WHERE key = 'appearance_options' AND json_valid(value) AND json_type(value, '$.theme_options') IS NOT NULL
+      `)
+    ]);
+    const cleaned = cleanupResult.changes + siteOptionsCleanup.meta.changes + appearanceOptionsCleanup.meta.changes;
+    if (cleaned > 0) {
+      debug(`已清理 ${cleaned} 项废弃设置`);
     }
-    return { success: true, cleaned: cleanupResult.changes };
+    return { success: true, cleaned };
   } catch (e) {
     debug('清理废弃 settings key 失败:', e);
     return { success: false, error: errorMessage(e) };

@@ -4,9 +4,9 @@ import type { DataRecord } from '../types/domain.js';
 const CURRENT_VERSION = '3.0.0-beta.1';
 export const AGENT_VERSION = '1.3.4';
 export const DEFAULT_SITE_TITLE = 'EdgeProbe';
-export const APPEARANCE_FIELDS = ['site_title', 'custom_bg', 'custom_head', 'custom_script', 'csp_static', 'csp_api', 'display_mode', 'theme_options'];
+export const APPEARANCE_FIELDS = ['site_title', 'custom_bg', 'custom_head', 'custom_script', 'csp_static', 'csp_api', 'display_mode'];
 
-export const SITE_FIELDS = ['is_public', 'show_price', 'show_expire', 'show_tf', 'show_time', 'show_long_history', 'tg_notify', 'tg_bot_token', 'tg_chat_id', 'turnstile_enabled', 'turnstile_login_enabled', 'turnstile_site_key', 'turnstile_secret_key', 'jwt_secret', 'username', 'password', 'cloudflare_account_id', 'cloudflare_token', 'custom_ct', 'custom_cu', 'custom_cm', 'custom_bd', 'expire_reminder', 'theme_url', 'history_id_optimized','servers_optimized'];
+export const SITE_FIELDS = ['is_public', 'show_price', 'show_expire', 'show_tf', 'show_time', 'show_long_history', 'tg_notify', 'tg_bot_token', 'tg_chat_id', 'turnstile_enabled', 'turnstile_login_enabled', 'turnstile_site_key', 'turnstile_secret_key', 'jwt_secret', 'username', 'password', 'cloudflare_account_id', 'cloudflare_token', 'custom_ct', 'custom_cu', 'custom_cm', 'custom_bd', 'expire_reminder', 'history_id_optimized','servers_optimized'];
 
 const SITE_SETTINGS_TTL = 120 * 1000;
 const JWT_SECRET_MIN_LENGTH = 32;
@@ -25,7 +25,6 @@ export interface SiteSettings {
   csp_static: string;
   csp_api: string;
   display_mode: string;
-  theme_options: Record<string, unknown>;
   is_public: string;
   show_price: string;
   show_expire: string;
@@ -49,7 +48,6 @@ export interface SiteSettings {
   custom_cm: string;
   custom_bd: string;
   expire_reminder: string;
-  theme_url: string;
   history_id_optimized: string;
   servers_optimized: string;
 }
@@ -67,7 +65,6 @@ const defaults: SiteSettings = {
   csp_static: '',
   csp_api: '',
   display_mode: 'bar',
-  theme_options: {},
   is_public: 'true',
   show_price: 'true',
   show_expire: 'true',
@@ -89,7 +86,6 @@ const defaults: SiteSettings = {
   custom_cm: 'gd-cm-dualstack.ip.zstaticcdn.com',
   custom_bd: 'ip.zstaticcdn.com',
   expire_reminder: 'false',
-  theme_url: '',
   history_id_optimized: 'false',
   servers_optimized: 'false'
 };
@@ -341,6 +337,7 @@ export async function saveSiteOptions(db: D1Database, updates: DataRecord): Prom
     : {};
   
   const siteOptions = { ...legacySiteOptions, ...existingSiteOptions, ...updates };
+  delete siteOptions.theme_url;
   siteOptions.tg_notify = normalizeTgNotify(siteOptions.tg_notify);
   siteOptions.custom_bd = normalizeCustomBd(siteOptions.custom_bd);
   
