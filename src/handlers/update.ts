@@ -17,10 +17,22 @@ import {
   shouldSendAgentUpdate
 } from '../utils/agentConfig.js';
 
+type MetricRecord = Record<string, any>;
+
+interface UpdatePayload extends MetricRecord {
+  id?: string;
+  secret?: string;
+  metrics?: MetricRecord;
+  samples?: unknown[];
+  batch?: unknown[];
+  rx_correction?: unknown;
+  tx_correction?: unknown;
+}
+
 // 将最新一次上报打包成前端可直接消费的 "当前状态" 对象
 // 与 /api/server 和 /api/servers 返回的字段保持一致，便于页面直接合并
-function buildPayloadForBroadcast(id, metrics = {}, extra = {}) {
-  const payload = {};
+function buildPayloadForBroadcast(id, metrics: MetricRecord = {}, extra: MetricRecord = {}) {
+  const payload: MetricRecord = {};
   mergeMetricsIntoServer(payload, metrics);
   payload.id = id;
   payload.region = extra.region || '';
@@ -33,8 +45,8 @@ function buildPayloadForBroadcast(id, metrics = {}, extra = {}) {
 // 批量推送：5秒窗口内合并向 DO 推送一次，减少请求次数
 const BATCH_WINDOW = 5000;
 const MAX_BATCH_SAMPLES = 300;
-let batchQueue = new Map();
-let flushingPromise = null;
+let batchQueue = new Map<string, MetricRecord>();
+let flushingPromise: Promise<void> | null = null;
 
 // 用于过滤不需要实时更新的字段
 const BROADCAST_DELETE_FIELDS = ['id', 'name', 'region', 'arch', 'os', 'kernel_version', 'cpu_info', 'cpu_cores', 'expire_date', 'server_group', 'traffic_limit', 'net_rx_monthly', 'net_tx_monthly', 'boot_time', 'timestamp', 'ip_v4', 'ip_v6'];
@@ -128,7 +140,7 @@ async function _flushBatch(env) {
   const queue = batchQueue;
   batchQueue = new Map();
 
-  const updates = [];
+  const updates: MetricRecord[] = [];
   for (const [serverId, item] of queue) {
     if (item && Array.isArray(item.samples) && item.samples.length > 0) {
       updates.push({ serverId, samples: item.samples });
@@ -163,16 +175,20 @@ function _ensureBatchFlush(env) {
   return flushingPromise;
 }
 
-export async function handleUpdate(request, env, ctx) {
+export async function handleUpdate(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
   try {
-    const data = await request.json();
+    const data = await request.json<UpdatePayload>();
     const { id, secret } = data;
 
     if (secret !== env.API_SECRET) {
       return createUnauthorizedResponse('Invalid secret');
     }
 
-    let regionCode = request.cf?.country || request.headers?.get('cf-ipcountry') || '';
+    const regionCode = String(request.cf?.country || request.headers.get('cf-ipcountry') || '');
     const agentVersion = normalizeAgentVersion(request.headers.get('X-Agent-Version'));
 
     const serverDetail = await getServerDetail(env.DB, id, true);
@@ -210,7 +226,7 @@ export async function handleUpdate(request, env, ctx) {
     // 从缓存中获取历史记录分区 ID
     const historyPartitionId = serverDetail.history_partition_id;
     if(!historyPartitionId) {
-      await ensureServerOptimization(env.DB, id);
+      await ensureServerOptimization(env.DB);
       logUpdateBadRequest('Missing history_partition_id', {
         id,
         history_partition_id: serverDetail.history_partition_id

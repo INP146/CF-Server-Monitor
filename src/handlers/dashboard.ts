@@ -11,6 +11,13 @@ import {
 
 const LATEST_REPORT_ID_CHUNK_SIZE = 500;
 
+interface LatestReportWire {
+  serverId: string;
+  samples: unknown[];
+  reportTs: number;
+  reportAgeMs?: number;
+}
+
 function withoutPrivateServerFields(server) {
   const item = { ...server };
   delete item.bandwidth;
@@ -19,13 +26,13 @@ function withoutPrivateServerFields(server) {
   return item;
 }
 
-async function getDurableLatestReportUpdates(env, serverIds) {
+async function getDurableLatestReportUpdates(env: Env, serverIds: string[]): Promise<LatestReportWire[]> {
   if (!env.METRICS_BROADCASTER || !Array.isArray(serverIds) || serverIds.length === 0) return [];
 
   try {
     const id = env.METRICS_BROADCASTER.idFromName('global');
     const stub = env.METRICS_BROADCASTER.get(id);
-    const updates = [];
+    const updates: LatestReportWire[] = [];
 
     for (let offset = 0; offset < serverIds.length; offset += LATEST_REPORT_ID_CHUNK_SIZE) {
       const chunk = serverIds.slice(offset, offset + LATEST_REPORT_ID_CHUNK_SIZE);
@@ -35,7 +42,7 @@ async function getDurableLatestReportUpdates(env, serverIds) {
         body: JSON.stringify({ serverIds: chunk })
       });
       if (!response.ok) continue;
-      const data = await response.json();
+      const data = await response.json<{ updates?: LatestReportWire[] }>();
       if (Array.isArray(data?.updates)) updates.push(...data.updates);
     }
 
@@ -46,7 +53,11 @@ async function getDurableLatestReportUpdates(env, serverIds) {
   }
 }
 
-function mergeLatestReportUpdates(serverIds, durableUpdates, workerUpdates) {
+function mergeLatestReportUpdates(
+  serverIds: string[],
+  durableUpdates: LatestReportWire[],
+  workerUpdates: LatestReportWire[]
+) {
   const merged = new Map();
 
   for (const update of durableUpdates) {

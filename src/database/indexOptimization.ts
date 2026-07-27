@@ -143,7 +143,11 @@ export function buildHistoryId(partitionId, timestamp) {
   return normalizedPartitionId * HISTORY_PARTITION_MULTIPLIER + formatHistoryTimeKey(timestamp);
 }
 
-export async function getServerHistoryInfo(db, serverId, server = null) {
+export async function getServerHistoryInfo(
+  db,
+  serverId,
+  server: { id?: unknown; history_partition_id?: unknown; timestamp?: unknown } | null = null
+) {
   const target = server && server.id === serverId
     ? server
     : (await getAllServers(db, true)).find(s => s.id === serverId);
@@ -159,7 +163,11 @@ export async function getServerHistoryInfo(db, serverId, server = null) {
   };
 }
 
-export function getHistoryIdRange(partitionId, startTimestamp = null, endTimestamp = null) {
+export function getHistoryIdRange(
+  partitionId,
+  startTimestamp: number | null = null,
+  endTimestamp: number | null = null
+) {
   const normalizedPartitionId = normalizeHistoryPartitionId(partitionId);
   if (!normalizedPartitionId) {
     throw new Error('Invalid history partition id');

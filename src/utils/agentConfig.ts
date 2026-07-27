@@ -11,7 +11,46 @@ const PING_NODE_HOST_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const IPV4_PATTERN = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const IPV4_LIKE_PATTERN = /^(?:\d+\.){3}\d+$/;
 
-function validateInteger(name, value, allowedValues = null, min = null, max = null) {
+interface AgentConfigInput {
+  collect_interval: number;
+  report_interval: number;
+  reset_day: number;
+}
+
+interface AgentConfig extends AgentConfigInput {
+  custom_ct: string;
+  custom_cu: string;
+  custom_cm: string;
+  custom_bd: string;
+  schema_version: number;
+}
+
+type ValidatedAgentConfig = AgentConfigInput & { schema_version: number };
+
+export type AgentConfigValidation =
+  | { valid: true; config: ValidatedAgentConfig }
+  | { valid: false; error: string };
+
+interface AgentSource {
+  [key: string]: unknown;
+  collect_interval?: unknown;
+  report_interval?: unknown;
+  reset_day?: unknown;
+  custom_ct?: unknown;
+  custom_cu?: unknown;
+  custom_cm?: unknown;
+  custom_bd?: unknown;
+  rx_correction?: unknown;
+  tx_correction?: unknown;
+}
+
+function validateInteger(
+  name: string,
+  value: unknown,
+  allowedValues: Set<number> | null = null,
+  min: number | null = null,
+  max: number | null = null
+) {
   if (typeof value !== 'number' || !Number.isInteger(value)) {
     return `${name} must be an integer`;
   }
@@ -23,7 +62,7 @@ function validateInteger(name, value, allowedValues = null, min = null, max = nu
   return null;
 }
 
-export function validateAgentConfigInput(input) {
+export function validateAgentConfigInput(input: AgentConfigInput): AgentConfigValidation {
   const collectError = validateInteger(
     'collect_interval',
     input.collect_interval,
@@ -63,7 +102,7 @@ export function validateAgentConfigInput(input) {
   };
 }
 
-function storedInteger(value, allowedValues, fallback) {
+function storedInteger(value: unknown, allowedValues: Set<number>, fallback: number): number {
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isInteger(number) && allowedValues.has(number) ? number : fallback;
 }
@@ -145,7 +184,7 @@ export function validatePingNode(value) {
 
 export function sanitizePingNode(value) {
   const result = validatePingNode(value);
-  return result.valid ? result.value : '';
+  return result.valid && result.value ? result.value : '';
 }
 
 export function isValidTrafficCorrection(value) {
@@ -164,7 +203,7 @@ export function normalizeTrafficCorrection(value) {
   return isValidTrafficCorrection(value) ? Number(value) : 0;
 }
 
-export function buildAgentConfig(server, settings = null) {
+export function buildAgentConfig(server: AgentSource, settings: AgentSource | null = null): AgentConfig {
   const collectInterval = storedInteger(server?.collect_interval, ALLOWED_COLLECT_INTERVALS, 0);
   let reportInterval = storedInteger(server?.report_interval, ALLOWED_REPORT_INTERVALS, 60);
   if (collectInterval > 0 && reportInterval < collectInterval) reportInterval = 60;
@@ -193,7 +232,7 @@ export function buildAgentConfig(server, settings = null) {
   };
 }
 
-export function serializeAgentConfig(config) {
+export function serializeAgentConfig(config: AgentConfig): string {
   return `collect_interval=${config.collect_interval}` +
     `&report_interval=${config.report_interval}` +
     `&reset_day=${config.reset_day}` +
@@ -204,19 +243,19 @@ export function serializeAgentConfig(config) {
     `&custom_bd=${config.custom_bd}`;
 }
 
-export function serializeCorrection(correction) {
+export function serializeCorrection(correction: { rx_correction: number; tx_correction: number } | null): string {
   if (correction === null || correction === undefined) return '';
   return `&rx_correction=${correction.rx_correction}` +
     `&tx_correction=${correction.tx_correction}`;
 }
 
-export async function describeAgentConfig(server, settings = null) {
+export async function describeAgentConfig(server: AgentSource, settings: AgentSource | null = null) {
   const config = buildAgentConfig(server, settings);
   const serialized = serializeAgentConfig(config);
   const md5 = await md5Hash(serialized);
 
   const hasCorrection = server?.rx_correction != null || server?.tx_correction != null;
-  let correction = null;
+  let correction: { rx_correction: number; tx_correction: number } | null = null;
   if (hasCorrection) {
     correction = {
       rx_correction: normalizeTrafficCorrection(server.rx_correction),

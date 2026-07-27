@@ -1,5 +1,8 @@
 export class AppError extends Error {
-  constructor(message, code = 500, details = null) {
+  readonly code: number;
+  readonly details: unknown;
+
+  constructor(message: string, code = 500, details: unknown = null) {
     super(message);
     this.name = 'AppError';
     this.code = code;
@@ -7,7 +10,7 @@ export class AppError extends Error {
   }
 }
 
-export function createErrorResponse(error, logError = true) {
+export function createErrorResponse(error: Error, logError = true) {
   if (logError) {
     if (error instanceof AppError) {
       console.error(`[Error] ${error.code}: ${error.message}`, error.details || '');
@@ -30,7 +33,7 @@ export function createErrorResponse(error, logError = true) {
   });
 }
 
-export function createSuccessResponse(data, headers = {}) {
+export function createSuccessResponse(data: unknown, headers: HeadersInit = {}) {
   const defaultHeaders = { 'Content-Type': 'application/json' };
   return new Response(JSON.stringify(data), {
     status: 200,

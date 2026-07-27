@@ -11,15 +11,15 @@
 import { clearAppearanceSettingsCache, clearSiteSettingsCache, debug } from './settings.js';
 
 const SERVERS_LIST_TTL = 120 * 1000;
-let serversListCache = null;
+let serversListCache: { data: any[]; time: number } | null = null;
 
 const LATEST_ALL_TTL = 30 * 1000;
-let latestAllCache = null;
+let latestAllCache: Map<string, any> | null = null;
 let latestAllCacheTime = 0;
 
-const metricsHistoryCache = new Map();
+const metricsHistoryCache = new Map<string, { data: any; timestamp: number }>();
 
-const serverDetailCache = new Map();
+const serverDetailCache = new Map<string, { data: any; time: number }>();
 
 export function getCacheDuration(hours) {
   if (hours >= 120) {

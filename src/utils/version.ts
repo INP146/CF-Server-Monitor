@@ -2,10 +2,15 @@ const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/INP146/EdgeProbe/r
 const REMOTE_VERSION_TTL = 5 * 60 * 1000;
 const REMOTE_VERSION_FAILURE_TTL = 30 * 1000;
 
-let cachedRemoteVersion = null;
+interface RemoteVersion {
+  workers: string;
+  agent: string;
+}
+
+let cachedRemoteVersion: RemoteVersion | null = null;
 let cachedRemoteVersionAt = 0;
 let cachedRemoteVersionFailureAt = 0;
-let remoteVersionPromise = null;
+let remoteVersionPromise: Promise<RemoteVersion | null> | null = null;
 
 export async function getRemoteVersion() {
   const now = Date.now();
@@ -36,7 +41,7 @@ async function fetchRemoteVersion(now) {
       return cachedRemoteVersion;
     }
 
-    const data = await response.json();
+    const data = await response.json<{ workers?: unknown; agent?: unknown }>();
     cachedRemoteVersion = {
       workers: typeof data.workers === 'string' ? data.workers : '',
       agent: typeof data.agent === 'string' ? data.agent : ''

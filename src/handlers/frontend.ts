@@ -1,4 +1,5 @@
 import { loadSettings, DEFAULT_SITE_TITLE } from '../utils/settings.js';
+import type { SiteSettings } from '../utils/settings.js';
 import {
   parseCspOrigins,
   buildApiDomainsWithWs,
@@ -12,13 +13,13 @@ const THEME_CACHE_TTL = 3600;
 const PREVIEW_COOKIE = 'cfsm_theme_preview';
 const PREVIEW_AUTH_COOKIE = 'cfsm_theme_preview_auth';
 
-let filesCache = null;
+let filesCache: Record<string, string> | null = null;
 
 async function loadFrontendFiles(env) {
   if (filesCache) return filesCache;
 
   try {
-    const files = {};
+    const files: Record<string, string> = {};
 
     if (env.ASSETS) {
       try {
@@ -266,7 +267,9 @@ function stripBrowserCacheHeaders(response) {
 
 async function fetchWithCache(rawUrl, contentType, workerCacheUrl) {
   const cacheKey = new Request(workerCacheUrl || rawUrl, { method: 'GET' });
-  const cache = typeof caches !== 'undefined' ? caches.default : null;
+  const cache = typeof caches !== 'undefined'
+    ? (caches as CacheStorage & { default: Cache }).default
+    : null;
 
   if (cache) {
     const cached = await cache.match(cacheKey);
@@ -419,7 +422,11 @@ function shouldUseBuiltinFrontend(path) {
   return path === '/admin' || path.startsWith('/admin/');
 }
 
-export async function serveFrontend(request, env, settings = null) {
+export async function serveFrontend(
+  request: Request,
+  env: Env,
+  settings: SiteSettings | null = null
+): Promise<Response> {
   const url = new URL(request.url);
   const path = url.pathname;
 

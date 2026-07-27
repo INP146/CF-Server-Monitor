@@ -10,6 +10,13 @@ import { sendNotification } from '../services/notification.js';
 import { getNextServerHistoryPartitionId, HISTORY_MAX_PARTITION_ID } from '../database/indexOptimization.js';
 import { isValidTrafficCorrection, validateAgentConfigInput, validatePingNode } from '../utils/agentConfig.js';
 import { detectBillingCycle, detectCurrencySymbol, normalizeBillingCycle, normalizeCurrency, normalizePrice, renewExpireDateIfNeeded } from '../utils/serverBilling.js';
+import type { SiteSettings } from '../utils/settings.js';
+
+type AdminPayload = Record<string, any>;
+
+type PingNodeResult =
+  | { valid: true; values: Record<string, string> }
+  | { valid: false; field: string; values?: never };
 
 const PING_NODE_FIELDS = ['custom_ct', 'custom_cu', 'custom_cm', 'custom_bd'];
 const THEME_PREVIEW_AUTH_COOKIE = 'cfsm_theme_preview_auth';
@@ -23,7 +30,7 @@ function normalizeServerRegion(value) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 16);
 }
 
-function normalizeServerBillingData(data = {}) {
+function normalizeServerBillingData(data: AdminPayload = {}) {
   const billingCycle = normalizeBillingCycle(data.billing_cycle || detectBillingCycle(data.price));
   const autoRenewal = normalizeBooleanFlag(data.auto_renewal);
 
@@ -73,7 +80,7 @@ function normalizeCspOrigin(value) {
   }
 }
 
-function normalizePingNodeFields(source, fields = PING_NODE_FIELDS) {
+function normalizePingNodeFields(source: AdminPayload, fields = PING_NODE_FIELDS): PingNodeResult {
   const values = {};
   for (const field of fields) {
     if (source?.[field] === undefined) continue;
@@ -230,7 +237,7 @@ async function cloudflareGraphql(query, variables, token) {
     },
     body: JSON.stringify({ query, variables })
   });
-  const data = await response.json();
+  const data = await response.json<AdminPayload>();
   if (!response.ok || data.errors) {
     const message = data.errors && data.errors.length > 0 ? data.errors.map(e => e.message).join('; ') : 'Cloudflare GraphQL request failed';
     throw new Error(message);
@@ -304,9 +311,14 @@ async function getD1DailyUsage(token, accountId) {
   };
 }
 
-export async function handleAdminAPI(request, env, sys, loadFullSettings = null) {
+export async function handleAdminAPI(
+  request: Request,
+  env: Env,
+  sys: SiteSettings,
+  loadFullSettings: (() => Promise<SiteSettings>) | null = null
+): Promise<Response> {
   try {
-    const data = await request.json();
+    const data = await request.json<AdminPayload>();
 
     if (data.action === 'login') {
       const { username, password } = data;
@@ -413,7 +425,15 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       
       const now = Date.now();
       const ONLINE_THRESHOLD = 300000;
-      const stats = {
+      const stats: {
+        total: number;
+        online: number;
+        offline: number;
+        total_cpu: number;
+        total_net_in: number;
+        total_net_out: number;
+        avg_cpu: number | string;
+      } = {
         total: servers.length,
         online: 0,
         offline: 0,
@@ -546,7 +566,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       }
 
       const shouldSaveAppearanceOptions = hasAppearanceInput(settings);
-      const appearanceOptions = {};
+      const appearanceOptions: AdminPayload = {};
 
       if (shouldSaveAppearanceOptions) {
         const nestedAppearanceOptions = settings.appearance_options || {};
@@ -574,7 +594,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
         clearAppearanceSettingsCache();
       }
 
-      const siteOptions = {};
+      const siteOptions: AdminPayload = {};
       for (const field of SITE_FIELDS) {
         if (settings[field] !== undefined) {
           if (field === 'password') {
@@ -609,7 +629,9 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
       const group = data.server_group || 'Default';
       const region = normalizeServerRegion(data.region);
 
-      const { max_order } = await env.DB.prepare('SELECT COALESCE(MAX(sort_order), -1) as max_order FROM servers').first();
+      const { max_order } = await env.DB.prepare(
+        'SELECT COALESCE(MAX(sort_order), -1) as max_order FROM servers'
+      ).first<{ max_order: number }>() || { max_order: -1 };
       const sortOrder = (max_order || 0) + 1;
 
       const historyPartitionId = await getNextServerHistoryPartitionId(env.DB);
@@ -805,12 +827,14 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
 
       const existingPartitionIds = await env.DB.prepare('SELECT history_partition_id FROM servers').all();
       const usedPartitionIds = new Set(
-        (existingPartitionIds.results || []).map(s => s.history_partition_id).filter(id => id > 0)
+        (existingPartitionIds.results || [])
+          .map(s => Number(s.history_partition_id))
+          .filter(id => id > 0)
       );
 
       let imported = 0;
       let skipped = 0;
-      const skippedIds = [];
+      const skippedIds: string[] = [];
 
       for (const server of importData) {
         if (!server.id || !isValidUUID(server.id)) {

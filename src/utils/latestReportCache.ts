@@ -2,7 +2,14 @@ const LATEST_REPORT_TTL_MS = 5 * 60 * 1000;
 const MAX_LATEST_REPORT_SERVERS = 1000;
 
 // 普通 Worker isolate 内的尽力而为缓存；不同 isolate 之间不共享。
-const latestReportUpdates = new Map();
+interface LatestReportUpdate {
+  serverId: string;
+  reportTs: number;
+  latestSampleTs: number;
+  samples: unknown[];
+}
+
+const latestReportUpdates = new Map<string, LatestReportUpdate>();
 
 function normalizeTimestamp(value, fallback = 0) {
   const timestamp = Number(value);
@@ -33,7 +40,7 @@ function pruneLatestReportUpdates(now = Date.now()) {
   }
 }
 
-export function cacheLatestReportUpdate(serverId, samples, reportTs = Date.now()) {
+export function cacheLatestReportUpdate(serverId: unknown, samples: unknown[], reportTs = Date.now()): void {
   if (!serverId || !Array.isArray(samples) || samples.length === 0) return;
 
   const now = Date.now();
@@ -69,11 +76,11 @@ export function cacheLatestReportUpdate(serverId, samples, reportTs = Date.now()
   }
 }
 
-export function getWorkerLatestReportUpdates(serverIds, now = Date.now()) {
+export function getWorkerLatestReportUpdates(serverIds: unknown[], now = Date.now()) {
   pruneLatestReportUpdates(now);
   if (!Array.isArray(serverIds)) return [];
 
-  const updates = [];
+  const updates: Array<Omit<LatestReportUpdate, 'latestSampleTs'> & { reportAgeMs: number }> = [];
   for (const serverId of serverIds) {
     const update = latestReportUpdates.get(String(serverId));
     if (!update) continue;

@@ -644,7 +644,7 @@ EdgeProbe/
 │   ├── favicon.ico             # 站点图标
 │   └── logo.svg                # Logo
 ├── src/
-│   ├── index.js                # 后端主入口 - 路由分发 + Durable Object 导出
+│   ├── index.ts                # 后端主入口 - 路由分发 + Durable Object 导出
 │   ├── database/
 │   │   ├── schema.js             # 数据库初始化、表结构定义
 │   │   ├── indexOptimization.js  # 数据库索引优化

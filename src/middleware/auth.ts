@@ -1,6 +1,11 @@
 const ALGORITHM = { name: 'HMAC', hash: 'SHA-256' };
 import { verifyPasswordHash } from '../utils/common.js';
 import { isValidJwtSecret } from '../utils/settings.js';
+import type { SiteSettings } from '../utils/settings.js';
+
+interface HeaderRequest {
+  headers: { get(name: string): string | null };
+}
 
 async function generateKeyFromSecret(secret) {
   const encoder = new TextEncoder();
@@ -61,16 +66,16 @@ async function verifyJwt(token, secret) {
   }
 }
 
-function getJwtSecret(env, sys) {
+function getJwtSecret(env: Env, sys: SiteSettings | null): string {
   if (isValidJwtSecret(sys?.jwt_secret)) {
-    return sys.jwt_secret;
+    return String(sys?.jwt_secret);
   }
 
   const fallback = env.API_SECRET || 'default_jwt_secret_for_server_monitor';
   return fallback.padEnd(32, 'x').substring(0, 64);
 }
 
-export async function generateToken(env, sys) {
+export async function generateToken(env: Env, sys: SiteSettings | null): Promise<string> {
   const payload = {
     sub: 'admin',
     iat: Math.floor(Date.now() / 1000),
@@ -81,7 +86,11 @@ export async function generateToken(env, sys) {
   return signJwt(payload, secret);
 }
 
-export async function checkAuth(request, env, sys) {
+export async function checkAuth(
+  request: HeaderRequest,
+  env: Env,
+  sys: SiteSettings | null
+): Promise<boolean> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) {
     return false;
@@ -106,7 +115,11 @@ export async function checkAuth(request, env, sys) {
   }
 }
 
-export async function validateCredentials(request, env, sys) {
+export async function validateCredentials(
+  request: HeaderRequest,
+  env: Env,
+  sys: SiteSettings | null
+) {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader) {

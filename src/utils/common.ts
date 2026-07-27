@@ -9,7 +9,7 @@
  * @param {string} secretKey - Turnstile secret key
  * @returns {Promise<boolean>} 验证结果
  */
-export async function verifyTurnstileToken(token, secretKey) {
+export async function verifyTurnstileToken(token: string | null, secretKey: string): Promise<boolean> {
   if (!token || !secretKey) {
     return false;
   }
@@ -26,7 +26,7 @@ export async function verifyTurnstileToken(token, secretKey) {
       })
     });
     
-    const data = await response.json();
+    const data = await response.json<{ success?: boolean }>();
     return data.success === true;
   } catch (e) {
     console.error('Turnstile verification error:', e);
@@ -42,13 +42,13 @@ export const PASSWORD_HASH_ITERATIONS = 50000;
 const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_HASH_BYTES = 32;
 
-function bytesToHex(bytes) {
+function bytesToHex(bytes: Uint8Array): string {
   return Array.from(bytes)
     .map(b => b.toString(16).padStart(2, '0'))
     .join('');
 }
 
-function hexToBytes(hex) {
+function hexToBytes(hex: string): Uint8Array | null {
   if (!hex || hex.length % 2 !== 0 || !/^[a-f0-9]+$/i.test(hex)) {
     return null;
   }
@@ -60,13 +60,16 @@ function hexToBytes(hex) {
   return bytes;
 }
 
-function timingSafeEqualBytes(left, right) {
+function timingSafeEqualBytes(left: Uint8Array | null, right: Uint8Array | null): boolean {
   if (!(left instanceof Uint8Array) || !(right instanceof Uint8Array)) {
     return false;
   }
 
-  if (left.length === right.length && crypto.subtle && typeof crypto.subtle.timingSafeEqual === 'function') {
-    return crypto.subtle.timingSafeEqual(left, right);
+  const subtle = crypto.subtle as SubtleCrypto & {
+    timingSafeEqual?: (a: ArrayBufferView, b: ArrayBufferView) => boolean;
+  };
+  if (left.length === right.length && typeof subtle.timingSafeEqual === 'function') {
+    return subtle.timingSafeEqual(left, right);
   }
 
   let diff = left.length ^ right.length;

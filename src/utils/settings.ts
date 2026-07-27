@@ -12,12 +12,51 @@ const CURRENT_CUSTOM_BD = 'ip.zstaticcdn.com';
 export const TG_NOTIFY_MINUTES_MIN = 2;
 export const TG_NOTIFY_MINUTES_MAX = 30;
 export const TG_NOTIFY_LEGACY_TRUE_MINUTES = 5;
-let cachedSiteSettings = null;
+
+export interface SiteSettings {
+  [key: string]: unknown;
+  site_title: string;
+  custom_bg: string;
+  custom_head: string;
+  custom_script: string;
+  csp_static: string;
+  csp_api: string;
+  display_mode: string;
+  theme_options: Record<string, unknown>;
+  is_public: string;
+  show_price: string;
+  show_expire: string;
+  show_tf: string;
+  show_time: string;
+  show_long_history: string;
+  tg_notify: string;
+  tg_bot_token: string;
+  tg_chat_id: string;
+  turnstile_enabled: string | boolean;
+  turnstile_login_enabled: string | boolean;
+  turnstile_site_key: string;
+  turnstile_secret_key: string;
+  jwt_secret: string;
+  username?: string;
+  password?: string;
+  cloudflare_account_id: string;
+  cloudflare_token: string;
+  custom_ct: string;
+  custom_cu: string;
+  custom_cm: string;
+  custom_bd: string;
+  expire_reminder: string;
+  theme_url: string;
+  history_id_optimized: string;
+  servers_optimized: string;
+}
+
+let cachedSiteSettings: SiteSettings | null = null;
 let siteSettingsCacheExpiry = 0;
-let cachedAppearanceOptions = null;
+let cachedAppearanceOptions: Partial<SiteSettings> | null = null;
 let appearanceOptionsCacheExpiry = 0;
 
-const defaults = {
+const defaults: SiteSettings = {
   site_title: DEFAULT_SITE_TITLE,
   custom_bg: '',
   custom_head: '',
@@ -93,10 +132,13 @@ export function isValidJwtSecret(secret) {
   return typeof secret === 'string' && secret.length >= JWT_SECRET_MIN_LENGTH;
 }
 
-function tryParseJSON(str) {
+function tryParseJSON(str): Partial<SiteSettings> | null {
   if (!str) return null;
   try {
-    return JSON.parse(str);
+    const parsed: unknown = JSON.parse(str);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Partial<SiteSettings>
+      : null;
   } catch (e) {
     return null;
   }
@@ -163,7 +205,7 @@ async function saveJwtSecretIfMissing(db, secret) {
     ? tryParseJSON(siteRow.value)
     : null;
 
-  return isValidJwtSecret(siteOptions?.jwt_secret) ? siteOptions.jwt_secret : secret;
+  return isValidJwtSecret(siteOptions?.jwt_secret) ? String(siteOptions?.jwt_secret) : secret;
 }
 
 async function ensurePersistedJwtSecret(db, result, siteOptions) {
@@ -178,7 +220,7 @@ async function ensurePersistedJwtSecret(db, result, siteOptions) {
   return saveJwtSecretIfMissing(db, secret);
 }
 
-export async function loadSiteSettings(db) {
+export async function loadSiteSettings(db): Promise<SiteSettings> {
   const now = Date.now();
   if (cachedSiteSettings && now < siteSettingsCacheExpiry) {
     debug('Settings缓存命中');
@@ -187,7 +229,7 @@ export async function loadSiteSettings(db) {
   debug('Settings缓存更新');
 
   const result = { ...defaults };
-  let siteOptions = null;
+  let siteOptions: Partial<SiteSettings> | null = null;
 
   try {
     const siteRow = await db.prepare(
@@ -230,7 +272,7 @@ export function clearSiteSettingsCache() {
   siteSettingsCacheExpiry = 0;
 }
 
-export async function loadAppearanceOptions(db) {
+export async function loadAppearanceOptions(db): Promise<Partial<SiteSettings>> {
   const now = Date.now();
   if (cachedAppearanceOptions && now < appearanceOptionsCacheExpiry) {
     debug('Appearance缓存命中');
@@ -238,9 +280,9 @@ export async function loadAppearanceOptions(db) {
   }
   debug('Appearance缓存更新');
 
-  const result = {};
+  const result: Partial<SiteSettings> = {};
   copyFields(result, defaults, APPEARANCE_FIELDS);
-  let appearanceOptions = null;
+  let appearanceOptions: Partial<SiteSettings> | null = null;
 
   try {
     const appearanceRow = await db.prepare(
@@ -273,7 +315,7 @@ export function clearAppearanceSettingsCache() {
   appearanceOptionsCacheExpiry = 0;
 }
 
-export async function loadSettings(db) {
+export async function loadSettings(db): Promise<SiteSettings> {
   const [siteSettings, appearanceOptions] = await Promise.all([
     loadSiteSettings(db),
     loadAppearanceOptions(db)

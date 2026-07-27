@@ -143,7 +143,7 @@ export async function clearHistory(db) {
 
     await saveSiteOptions(db, { history_id_optimized: 'true' });
 
-    await clearAllCaches(db);
+    clearAllCaches();
     
     debug('✅ 数据库重建完成');
     
@@ -244,7 +244,7 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     : false;
   const needsIdRange = currentUsesIdRange || oldUsesIdRange;
 
-  let idRange = null;
+  let idRange: { startId: number; endId: number } | null = null;
   if (needsIdRange) {
     if (!historyInfo.partitionId) {
       throw new Error('Invalid history partition id');
@@ -253,12 +253,12 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     idRange = getHistoryIdRange(historyInfo.partitionId, queryStart);
   }
 
-  const sourceQueries = [];
-  const bindValues = [intervalMs];
+  const sourceQueries: string[] = [];
+  const bindValues: Array<string | number> = [intervalMs];
 
   sourceQueries.push(buildHistorySourceQuery('metrics_history', currentUsesIdRange, columns));
   if (currentUsesIdRange) {
-    bindValues.push(idRange.startId, idRange.endId);
+    bindValues.push(idRange!.startId, idRange!.endId);
   } else {
     bindValues.push(serverId, queryStart);
   }
@@ -267,7 +267,7 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     debug('[History] 跨周查询，合并 metrics_history 和 metrics_history_old');
     sourceQueries.push(buildHistorySourceQuery('metrics_history_old', oldUsesIdRange, columns));
     if (oldUsesIdRange) {
-      bindValues.push(idRange.startId, idRange.endId);
+      bindValues.push(idRange!.startId, idRange!.endId);
     } else {
       bindValues.push(serverId, queryStart);
     }
@@ -456,7 +456,11 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
   }
 }
 
-export async function getLatestMetrics(db, serverId, server = null) {
+export async function getLatestMetrics(
+  db,
+  serverId,
+  server: { id?: unknown; history_partition_id?: unknown; timestamp?: unknown } | null = null
+) {
   try {
     const historyInfo = await getServerHistoryInfo(db, serverId, server);
     if (!historyInfo.partitionId) {

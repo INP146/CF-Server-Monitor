@@ -227,8 +227,8 @@ export async function checkOfflineNodes(db) {
 
     const now = Date.now();
     const offlineThreshold = tgNotifyMinutes * 60 * 1000;
-    const offlineNodes = [];
-    const recoveredNodes = [];
+    const offlineNodes: Array<{ name: string; lastReportTime?: number }> = [];
+    const recoveredNodes: typeof allServers = [];
 
     for (const s of allServers) {
       if (s.offline_notify_disabled === '1') continue;
@@ -284,7 +284,7 @@ export async function checkExpiringServers(db) {
     const allServers = await getAllServers(db);
     const now = Date.now();
     const REMINDER_DAYS = 7;
-    const expiringServers = [];
+    const expiringServers: Array<{ name: string; expire_date: string; days: number }> = [];
     const shouldNotify = siteSettings.expire_reminder === 'true' && !!siteSettings.tg_bot_token;
     let hasRenewedServers = false;
 

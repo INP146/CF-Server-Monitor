@@ -10,7 +10,7 @@ import {
 
 export async function updateDatabase(db) {
   debug('开始执行数据库更新...');
-  const results = [];
+  const results: unknown[] = [];
   
   try {
     const historyIndex = await ensureHistoryIndex(db);

@@ -1,6 +1,6 @@
 # Cloudflare Workers 配置，线上已由deploy.yml接管，这里仅供本地测试
 name = "edgeprobe"
-main = "src/index.js"
+main = "src/index.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
 
@@ -9,7 +9,7 @@ keep_vars = true
 # 定时任务配置（UTC）
 # - 每分钟：执行离线节点检测
 # - 每小时：合并执行其他定时任务（每月1号数据清理、每月8号清理旧表、每天12点服务器到期检测）
-# - 注意同步修改deploy和index.js scheduled函数里面的值
+# - 注意同步修改deploy和index.ts scheduled函数里面的值
 [triggers]
 crons = ["*/1 * * * *", "0 * * * *"]
 
