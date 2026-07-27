@@ -1,76 +1,91 @@
 <template>
-  <article class="server-card" :class="{ offline: server.status === 'offline', 'is-list': listView }">
-    <div class="server-card-head">
-      <div class="server-identity">
-        <span class="flag-wrap"><img :src="`/flags/${server.region}.svg`" alt="" /></span>
-        <div class="server-title">
-          <div class="name-row">
-            <h3>{{ server.name }}</h3>
-            <span class="status-badge" :class="server.status">
-              <span class="status-dot" :class="server.status" />
-              {{ server.status === 'online' ? '在线' : '离线' }}
-            </span>
-          </div>
-          <p>{{ server.location }} · {{ server.ip }}</p>
+  <a-card class="server-card" :class="{ offline: server.status === 'offline', 'is-list': listView }" hoverable>
+    <template #title>
+      <div class="server-card-title">
+        <img :src="`/flags/${server.region}.svg`" alt="" />
+        <div>
+          <strong>{{ server.name }}</strong>
+          <span>{{ server.location }} · {{ server.ip }}</span>
         </div>
       </div>
-      <n-button quaternary circle aria-label="打开节点详情">
-        <template #icon><n-icon :component="ChevronRight" /></template>
-      </n-button>
-    </div>
+    </template>
+    <template #extra>
+      <div class="server-card-extra">
+        <a-badge
+          :status="server.status === 'online' ? 'success' : 'error'"
+          :text="server.status === 'online' ? '在线' : '离线'"
+        />
+        <a-button type="text" size="small" aria-label="打开节点详情">
+          <template #icon><RightOutlined /></template>
+        </a-button>
+      </div>
+    </template>
 
-    <div class="system-row">
-      <span class="os-icon"><img :src="`/${getOSImage(server.os)}`" alt="" /></span>
-      <span>{{ server.os }}</span>
-      <span class="separator" />
-      <span>{{ server.arch }}</span>
+    <div class="server-meta">
+      <span class="os-name">
+        <img :src="`/${getOSImage(server.os)}`" alt="" />
+        {{ server.os }} · {{ server.arch }}
+      </span>
       <span class="tag-list">
-        <n-tag v-for="tag in server.tags" :key="tag" size="small" :bordered="false">{{ tag }}</n-tag>
+        <a-tag v-for="tag in server.tags" :key="tag" color="blue">{{ tag }}</a-tag>
       </span>
     </div>
 
     <div class="metric-bars">
       <div v-for="metric in metrics" :key="metric.label" class="metric-row">
         <span>{{ metric.label }}</span>
-        <n-progress
-          type="line"
-          :percentage="metric.value"
-          :height="6"
-          :border-radius="3"
-          :show-indicator="false"
-          :color="metricColor(metric.value)"
-          rail-color="var(--progress-rail)"
+        <a-progress
+          :percent="metric.value"
+          :stroke-width="7"
+          :show-info="false"
+          :status="metric.value >= 85 ? 'exception' : 'normal'"
+          :stroke-color="metricColor(metric.value)"
         />
         <strong>{{ metric.value }}%</strong>
       </div>
     </div>
 
+    <a-divider />
+
     <div class="network-grid">
       <div>
-        <span><Download :size="14" /> 下载</span>
+        <span><DownloadOutlined /> 下载</span>
         <strong>{{ server.download }}</strong>
       </div>
       <div>
-        <span><Upload :size="14" /> 上传</span>
+        <span><UploadOutlined /> 上传</span>
         <strong>{{ server.upload }}</strong>
       </div>
       <div>
-        <span><Radio :size="14" /> 延迟</span>
+        <span><WifiOutlined /> 延迟</span>
         <strong :class="latencyClass">{{ server.latency === null ? '超时' : `${server.latency} ms` }}</strong>
       </div>
     </div>
 
+    <a-divider />
+
     <div class="server-card-foot">
-      <span><Clock3 :size="14" /> 运行 {{ server.uptime }}</span>
+      <span><ClockCircleOutlined /> 运行 {{ server.uptime }}</span>
       <span>负载 {{ server.load }}</span>
     </div>
-  </article>
+  </a-card>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NButton, NIcon, NProgress, NTag } from 'naive-ui'
-import { ChevronRight, Clock3, Download, Radio, Upload } from '@lucide/vue'
+import AButton from 'ant-design-vue/es/button'
+import ABadge from 'ant-design-vue/es/badge'
+import ACard from 'ant-design-vue/es/card'
+import ADivider from 'ant-design-vue/es/divider'
+import AProgress from 'ant-design-vue/es/progress'
+import ATag from 'ant-design-vue/es/tag'
+import {
+  ClockCircleOutlined,
+  DownloadOutlined,
+  RightOutlined,
+  UploadOutlined,
+  WifiOutlined,
+} from '@ant-design/icons-vue'
 
 import type { MockServer } from '../data/dashboard'
 import { getOSImage } from '../utils/os-icon'
