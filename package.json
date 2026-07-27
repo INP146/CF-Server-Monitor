@@ -10,7 +10,10 @@
     "types": "wrangler types --include-runtime false",
     "typecheck": "wrangler types --include-runtime false --check && tsc --project tsconfig.worker.json --noEmit",
     "dev:frontend": "vite",
+    "dev:frontend-next": "vite --config vite.config.next.ts",
     "build:frontend": "node scripts/build.js",
+    "build:frontend-next": "npm run typecheck:frontend-next && vite build --config vite.config.next.ts",
+    "typecheck:frontend-next": "vue-tsc --noEmit --project tsconfig.frontend-next.json",
     "build:github-page": "tsx scripts/build-github-page.js",
     "test:agent-config": "tsx test/agent-config.js",
     "preview": "vite preview"
@@ -38,9 +41,10 @@
     "@vitejs/plugin-vue": "^6.0.0",
     "fs-extra": "^11.3.5",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2",
+    "typescript": "6.0.3",
     "vite": "^6.0.0",
     "vite-plugin-mkcert": "^2.1.0",
+    "vue-tsc": "3.3.8",
     "wrangler": "^4.114.0"
   },
   "dependencies": {

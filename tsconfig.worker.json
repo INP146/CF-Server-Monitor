@@ -18,6 +18,7 @@
     "src/**/*.ts"
   ],
   "exclude": [
-    "src/frontend"
+    "src/frontend",
+    "src/frontend-next"
   ]
 }
