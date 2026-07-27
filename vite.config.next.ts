@@ -14,6 +14,7 @@ const createWorkerProxy = () => ({
 
 export default defineConfig({
   root: fileURLToPath(new URL('./src/frontend-next', import.meta.url)),
+  publicDir: fileURLToPath(new URL('./public', import.meta.url)),
   plugins: [vue()],
   resolve: {
     alias: {
