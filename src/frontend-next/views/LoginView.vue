@@ -100,6 +100,6 @@ async function submitLogin() {
   submitting.value = true
   await new Promise((resolve) => window.setTimeout(resolve, 650))
   submitting.value = false
-  window.location.hash = '#/'
+  window.location.hash = '#/admin/panel'
 }
 </script>
