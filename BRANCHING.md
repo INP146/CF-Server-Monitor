@@ -36,6 +36,16 @@ git merge --ff-only origin/main
 git push origin dev
 ```
 
+## 标签规范
+
+- Workers/产品版本使用 `vMAJOR.MINOR.PATCH`；预发布版本使用
+  `vMAJOR.MINOR.PATCH-beta.N`。
+- Agent 使用独立的 `agent-vMAJOR.MINOR.PATCH` 标签，禁止与产品版本混用。
+- 标签必须是位于 `main` 的带注释标签，并在对应代码完成发布后创建。
+- 已推送的标签不可移动或复用；发布错误时创建新的修订版本。
+- 从原项目继承的 `v2.x` 历史标签保留当时真实版本号。历史中的四段版本号
+  `v2.7.3.1` 至 `v2.7.3.4` 作为兼容例外，不应用于 EdgeProbe 3.x 版本线。
+
 ## 热修复
 
 从 `main` 创建 `hotfix/*`，修复后合入 `main`，然后在继续开发前把 `main` 合回
