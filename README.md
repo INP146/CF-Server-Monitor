@@ -941,6 +941,11 @@ node test/api-check.js --help
 
 </details>
 
+## 分支维护
+
+本仓库采用 `dev` 集成、`main` 发布的维护流程，上游正式版本先同步到 `dev` 审查和测试。
+详细规则见 [BRANCHING.md](BRANCHING.md)。
+
 ## 📄 许可证
 
 MIT License
