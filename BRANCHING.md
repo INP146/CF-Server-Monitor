@@ -24,7 +24,8 @@
 1. 在 `dev` 或基于 `dev` 的 `release/*` 分支准备发布。
 2. 统一更新 Workers、Agent 的版本号及更新记录。
 3. 完成构建和测试。
-4. 创建从 `dev` 到 `main` 的 PR 并合并。
+4. 创建从 `dev` 到 `main` 的 PR，并使用 **Create a merge commit** 合并；发布 PR 禁止
+   使用 squash 或 rebase，否则 `dev` 和 `main` 会产生不同历史。
 5. 在合并后的 `main` 提交上创建带注释的 `vX.Y.Z` 标签。
 6. 新一轮开发开始前，立即将 `dev` 快进到 `main`，保证两个分支共享同一个发布节点。
 
