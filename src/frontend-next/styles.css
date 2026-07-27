@@ -51,7 +51,8 @@ a.ant-btn:active {
   background: var(--layout-bg);
 }
 
-.app-shell.is-dark {
+.app-shell.is-dark,
+.login-page.is-dark {
   --layout-bg: #101214;
   --header-bg: rgba(20, 20, 20, 0.94);
   --border: #303030;
@@ -90,18 +91,17 @@ a.ant-btn:active {
 }
 
 .brand-mark {
-  width: 34px;
-  height: 34px;
+  width: 44px;
+  height: 30px;
   display: inline-grid;
   place-items: center;
   flex: 0 0 auto;
-  border-radius: 6px;
-  color: #ffffff;
-  background: var(--cf-orange);
 }
 
-.brand-mark .anticon {
-  font-size: 20px;
+.brand-mark img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand-copy {
@@ -472,6 +472,67 @@ a.ant-btn:active {
   padding: 64px 20px;
 }
 
+.login-page {
+  min-height: 100vh;
+  position: relative;
+  color: var(--text);
+  background: var(--layout-bg);
+}
+
+.login-topbar {
+  width: 100%;
+  height: 64px;
+  padding: 0 28px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: absolute;
+  inset: 0 0 auto;
+}
+
+.login-panel {
+  min-height: 100vh;
+  padding: 84px 24px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+}
+
+.login-card {
+  width: min(100%, 410px);
+}
+
+.login-card .ant-card-body {
+  padding: 30px;
+}
+
+.login-heading {
+  margin-bottom: 26px;
+}
+
+.login-heading h1 {
+  margin: 0;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1.4;
+  letter-spacing: 0;
+}
+
+.login-heading p {
+  margin: 6px 0 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.login-card .ant-form-item {
+  margin-bottom: 18px;
+}
+
+.login-options {
+  margin: -2px 0 22px;
+}
+
 @media (max-width: 900px) {
   .summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -542,6 +603,19 @@ a.ant-btn:active {
   .server-card .ant-card-body {
     padding-right: 16px;
     padding-left: 16px;
+  }
+
+  .login-topbar {
+    height: 58px;
+    padding: 0 12px;
+  }
+
+  .login-panel {
+    padding: 74px 16px 28px;
+  }
+
+  .login-card .ant-card-body {
+    padding: 24px;
   }
 }
 
