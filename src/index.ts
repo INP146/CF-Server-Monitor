@@ -5,7 +5,6 @@ import { handleAdminAPI } from './handlers/admin.js';
 import { serveFrontend } from './handlers/frontend.js';
 import { handleUpdate, handleWebSocketUpgrade } from './handlers/update.js';
 import { handleServerAPI, handleServersAPI } from './handlers/dashboard.js';
-import { handleTheme } from './handlers/theme.js';
 import { loadSettings, loadSiteSettings, loadAppearanceOptions, setDebug, debug, getCurrentVersion } from './utils/settings.js';
 import { checkAuth, simpleAuthResponse } from './middleware/auth.js';
 import { getServerDetail, getMetricsHistoryCache, setMetricsHistoryCache, getCacheDuration } from './utils/cache.js';
@@ -13,6 +12,8 @@ import { AppError, createSuccessResponse, createUnauthorizedResponse, createBadR
 import { verifyTurnstileToken } from './utils/common.js';
 import { getCorsAllowedOrigins, createOptionsResponse, applyCors } from './utils/cors.js';
 import { getRemoteVersion } from './utils/version.js';
+import type { SiteSettings } from './utils/settings.js';
+import { errorMessage } from './types/domain.js';
 // Durable Objects: 实时指标广播
 // 显式 import + extends，确保 wrangler 静态分析器能在入口文件直接识别此 DO 类
 import { MetricsBroadcaster as _MetricsBroadcaster }
@@ -20,7 +21,7 @@ import { MetricsBroadcaster as _MetricsBroadcaster }
 
 export class MetricsBroadcaster extends _MetricsBroadcaster {}
 
-async function fetchStaticAsset(request, env, path) {
+async function fetchStaticAsset(request: Request, env: Env, path: string): Promise<Response | null> {
   if (!env.ASSETS || request.method !== 'GET') return null;
 
   try {
@@ -31,31 +32,7 @@ async function fetchStaticAsset(request, env, path) {
   }
 }
 
-function isAdminAssetReferrer(request) {
-  const referrer = request.headers.get('Referer') || request.headers.get('Referrer') || '';
-  if (!referrer) return false;
-
-  try {
-    const requestUrl = new URL(request.url);
-    const referrerUrl = new URL(referrer);
-    return referrerUrl.origin === requestUrl.origin &&
-      (referrerUrl.pathname === '/admin' || referrerUrl.pathname.startsWith('/admin/'));
-  } catch (_) {
-    return false;
-  }
-}
-
-function cleanThemeAssetResponse(response) {
-  const headers = new Headers(response.headers);
-  headers.delete('X-CFSM-Theme-Asset');
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers
-  });
-}
-
-async function getEncryptionKey(env, sys) {
+async function getEncryptionKey(env: Env, sys: SiteSettings | null): Promise<CryptoKey> {
   let secret = (sys && sys.jwt_secret) || env.TURNSTILE_SECRET_KEY || env.API_SECRET || 'default_secret_key_for_turnstile_encryption';
   secret += '_turnstile';
   const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret));
@@ -69,7 +46,7 @@ async function getEncryptionKey(env, sys) {
   return keyMaterial;
 }
 
-async function encryptTurnstileData(data, env, sys) {
+async function encryptTurnstileData(data: unknown, env: Env, sys: SiteSettings | null): Promise<string> {
   const key = await getEncryptionKey(env, sys);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoder = new TextEncoder();
@@ -85,7 +62,11 @@ async function encryptTurnstileData(data, env, sys) {
   return btoa(String.fromCharCode(...combined));
 }
 
-async function decryptTurnstileData(encoded, env, sys) {
+async function decryptTurnstileData(
+  encoded: string,
+  env: Env,
+  sys: SiteSettings | null
+): Promise<{ expires?: number } | null> {
   try {
     const key = await getEncryptionKey(env, sys);
     const decoded = new Uint8Array(atob(encoded).split('').map(c => c.charCodeAt(0)));
@@ -97,27 +78,41 @@ async function decryptTurnstileData(encoded, env, sys) {
       ciphertext
     );
     const encoder = new TextDecoder();
-    return JSON.parse(encoder.decode(decrypted));
+    const parsed: unknown = JSON.parse(encoder.decode(decrypted));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as { expires?: number }
+      : null;
   } catch (e) {
     debug('Cookie decryption error:', e);
     return null;
   }
 }
 
-async function isTurnstileVerified(request, env, sys) {
+async function isTurnstileVerified(
+  request: Request,
+  env: Env,
+  sys: SiteSettings | null
+): Promise<boolean> {
   const verifiedHeader = request.headers.get('X-Turnstile-Verified');
   
   if (!verifiedHeader) return false;
   
   try {
     const decrypted = await decryptTurnstileData(verifiedHeader, env, sys);
-    return decrypted && decrypted.expires && Date.now() < decrypted.expires * 1000;
+    return !!(decrypted?.expires && Date.now() < decrypted.expires * 1000);
   } catch {
     return false;
   }
 }
 
-async function fetchHistoryData(env, request, id, hours, columns, sys = null) {
+async function fetchHistoryData(
+  env: Env,
+  request: Request,
+  id: string | null,
+  hours: number,
+  columns: string,
+  sys: SiteSettings | null = null
+): Promise<Response> {
   if (!id) return createBadRequestResponse('Missing ID');
 
   const ALLOWED_HOURS = [0.167, 0.5, 1, 6, 12, 24, 48, 96, 168];
@@ -154,7 +149,7 @@ async function fetchHistoryData(env, request, id, hours, columns, sys = null) {
   try {
     data = await getMetricsHistory(env.DB, id, clampedHours, columns, server);
   } catch (e) {
-    const message = e && e.message ? e.message : String(e);
+    const message = errorMessage(e);
     if (/no such column/i.test(message)) {
       debug('[History] 数据库字段缺失，可能尚未升级数据库:', message);
       return new Response(JSON.stringify({
@@ -200,23 +195,6 @@ export default {
       return Response.redirect(target.toString(), 302);
     }
 
-    if (method === 'GET' && path.startsWith('/assets/')) {
-      if (isAdminAssetReferrer(request)) {
-        const staticAssetResponse = await fetchStaticAsset(request, env, path);
-        if (staticAssetResponse) {
-          return applyCors(staticAssetResponse, request, corsAllowedOrigins);
-        }
-      }
-
-      try {
-        const themeAssetResponse = await serveFrontend(request, env, await loadSettings(env.DB));
-        if (themeAssetResponse.headers.get('X-CFSM-Theme-Asset') === '1') {
-          return applyCors(cleanThemeAssetResponse(themeAssetResponse), request, corsAllowedOrigins);
-        }
-      } catch (e) {
-      }
-    }
-
     if (env.ASSETS && method === 'GET') {
       const staticAssetResponse = await fetchStaticAsset(request, env, path);
       if (staticAssetResponse) {
@@ -236,14 +214,14 @@ export default {
 
     // /api/config 在不带 X-Turnstile-Token 且不带 X-Turnstile-Verified 时仍然 bypass（用于初始化判断是否需要验证），
     // 带 token 或 verified header 时则走完整验证流程，以便复用 verified 字段返回验证结果
-    const isTurnstileBypassed = (reqPath) => {
+    const isTurnstileBypassed = (reqPath: string) => {
       if (bypassTurnstilePaths.includes(reqPath)) return true;
       if (reqPath === '/api/config' && !request.headers.get('X-Turnstile-Token') && !request.headers.get('X-Turnstile-Verified')) return true;
       return false;
     };
 
     let setTurnstileVerified = false;
-    let sys = null;
+    let sys: SiteSettings | null = null;
 
     if (isApiRequest && !isTurnstileBypassed(path)) {
       sys = await loadSiteSettings(env.DB);
@@ -292,28 +270,28 @@ export default {
           const stub = env.METRICS_BROADCASTER.get(id);
           return await stub.fetch('http://internal/health');
         } catch (e) {
-          return createSuccessResponse({ ok: false, reason: e.message });
+          return createSuccessResponse({ ok: false, reason: errorMessage(e) });
         }
       }},
       { method: 'GET', path: '/api/config', handler: async () => {
-        await ensureSiteSettings();
+        const settings = await ensureSiteSettings();
         const appearanceOptions = await loadAppearanceOptions(env.DB);
-        const turnstileEnabled = sys.turnstile_enabled === 'true';
-        const turnstileLoginEnabled = sys.turnstile_login_enabled === 'true';
+        const turnstileEnabled = settings.turnstile_enabled === 'true' || settings.turnstile_enabled === true;
+        const turnstileLoginEnabled = settings.turnstile_login_enabled === 'true' || settings.turnstile_login_enabled === true;
         let verified = false;
-        let turnstileVerified = null;
+        let turnstileVerified: string | null = null;
 
         if (turnstileEnabled) {
-          verified = await isTurnstileVerified(request, env, sys);
+          verified = await isTurnstileVerified(request, env, settings);
           if (setTurnstileVerified) {
             verified = true;
             const expires = Math.floor(Date.now() / 1000) + 3600;
             const cookieData = { expires, verified: true, timestamp: Date.now() };
-            turnstileVerified = await encryptTurnstileData(cookieData, env, sys);
+            turnstileVerified = await encryptTurnstileData(cookieData, env, settings);
           }
         }
 
-        const isLoggedIn = await checkAuth(request, env, sys);
+        const isLoggedIn = await checkAuth(request, env, settings);
         const remoteVersion = isLoggedIn ? await getRemoteVersion() : null;
 
         return createSuccessResponse({
@@ -322,44 +300,39 @@ export default {
             last_workers_version: remoteVersion?.workers || null,
             last_agent_version: remoteVersion?.agent || null
           } : {}),
-          is_public: sys.is_public === 'true',
+          is_public: settings.is_public === 'true',
           authorization: isLoggedIn,
           turnstile_enabled: turnstileEnabled,
           turnstile_login_enabled: turnstileEnabled || turnstileLoginEnabled,
-          turnstile_site_key: sys.turnstile_site_key || '',
+          turnstile_site_key: settings.turnstile_site_key || '',
           site_title: appearanceOptions.site_title || '',
           display_mode: appearanceOptions.display_mode || 'bar',
-          theme_options: appearanceOptions.theme_options || {},
           verified: verified,
           turnstile_verified: turnstileVerified,
-          show_long_history: sys.show_long_history === 'true'
+          show_long_history: settings.show_long_history === 'true'
         });
       }},
-      { method: 'GET', path: '/theme', handler: async () => {
-        const themeStore = await handleTheme()
-        return createSuccessResponse(themeStore)
-      }},
       { method: 'GET', path: '/api/server', handler: async () => {
-        await ensureSiteSettings();
-        return handleServerAPI(request, env, sys);
+        const settings = await ensureSiteSettings();
+        return handleServerAPI(request, env, settings);
       }},
       { method: 'GET', path: '/api/servers', handler: async () => {
-        await ensureFullSettings();
-        return handleServersAPI(request, env, sys);
+        const settings = await ensureFullSettings();
+        return handleServersAPI(request, env, settings);
       }},
       { method: 'GET', path: '/api/ws', handler: async () => handleWebSocketUpgrade(request, env) },
 
       { method: 'GET', path: '/api/history/all', handler: async () => {
-        await ensureSiteSettings();
+        const settings = await ensureSiteSettings();
         const id = url.searchParams.get('id');
         const hours = parseFloat(url.searchParams.get('hours') || '24');
         const allColumns = 'cpu, gpu_info, ram_total, ram_used, disk_total, disk_used, processes, net_in_speed, net_out_speed, tcp_conn, udp_conn, ping_ct, ping_cu, ping_cm, ping_bd, loss_ct, loss_cu, loss_cm, loss_bd, swap_total, swap_used, load_avg, region, kernel_version';
         // 后续版本可以删掉region 字段，用于升级数据库提示
-        return fetchHistoryData(env, request, id, hours, allColumns, sys);
+        return fetchHistoryData(env, request, id, hours, allColumns, settings);
       }},
       { method: 'POST', path: '/admin/api', handler: async () => {
-        await ensureSiteSettings();
-        return handleAdminAPI(request, env, sys, ensureFullSettings);
+        const settings = await ensureSiteSettings();
+        return handleAdminAPI(request, env, settings, ensureFullSettings);
       }},
       { method: 'POST', path: '/updateDatabase', handler: async () => {
         await ensureSiteSettings();
@@ -410,7 +383,7 @@ export default {
     }
 
     const fullSettings = await loadSettings(env.DB);
-    const frontendResponse = await serveFrontend(request, env, fullSettings);
+    const frontendResponse = await serveFrontend(env, fullSettings);
     return applyCors(frontendResponse, request, corsAllowedOrigins);
   },
 
@@ -455,4 +428,4 @@ export default {
       }
     }
   }
-};
+} satisfies ExportedHandler<Env>;

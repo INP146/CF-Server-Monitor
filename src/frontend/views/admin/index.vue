@@ -92,11 +92,6 @@
             :class="{ active: activeTab === 'database' }"
             @click="activeTab = 'database'"
           >▸ {{ trans.dbManagement }}</button>
-          <button
-            class="tab-btn"
-            :class="{ active: activeTab === 'themeStore' }"
-            @click="activeTab = 'themeStore'"
-          >▸ {{ trans.themeStore }}</button>
         </div>
 
         <ServerTable
@@ -108,7 +103,6 @@
           :groups="groups"
           :active-tab="activeTab"
           :selected-api-index="selectedApiIndex"
-          :theme-url="settings.theme_url"
           :latest-agent-version="latestAgentVersion"
           :copied-server-id="copiedServerId"
           :copied-note-server-id="copiedNoteServerId"
@@ -153,13 +147,6 @@
           @open-db-modal="openDbModal"
         />
 
-        <ThemeStorePanel
-          :trans="trans"
-          :active-tab="activeTab"
-          :selected-api-index="selectedApiIndex"
-          :current-theme-url="settings.theme_url"
-          @theme-applied="settings.theme_url = $event"
-        />
       </div>
 
       <EditServerModal
@@ -456,7 +443,6 @@ import AdminLogin from './components/AdminLogin.vue'
 import ServerTable from './components/ServerTable.vue'
 import SettingsPanel from './components/SettingsPanel.vue'
 import DatabasePanel from './components/DatabasePanel.vue'
-import ThemeStorePanel from './components/ThemeStorePanel.vue'
 import EditServerModal from './components/EditServerModal.vue'
 import DeleteServerModal from './components/DeleteServerModal.vue'
 import CopyCommandModal from './components/CopyCommandModal.vue'
@@ -494,31 +480,6 @@ const normalizeTgNotifySetting = (value) => {
 }
 
 const isTgNotifyEnabled = (value) => normalizeTgNotifySetting(value) !== '0'
-
-const isPlainObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value)
-
-const formatThemeOptions = (value) => {
-  const normalized = value === undefined || value === null ? {} : value
-  try {
-    return JSON.stringify(normalized, null, 2)
-  } catch (_) {
-    return '{}'
-  }
-}
-
-const parseThemeOptions = (value) => {
-  const raw = String(value || '').trim()
-  if (!raw) return { valid: true, value: {} }
-  try {
-    const parsed = JSON.parse(raw)
-    if (!isPlainObject(parsed)) {
-      return { valid: false }
-    }
-    return { valid: true, value: parsed }
-  } catch (_) {
-    return { valid: false }
-  }
-}
 
 const formatNumber = (value) => Number(value || 0).toLocaleString()
 const getUsagePercent = (used, limit) => {
@@ -571,7 +532,6 @@ const settings = ref({
   custom_head: '',
   custom_script: '',
   display_mode: 'bar',
-  theme_options: '{}',
   is_public: false,
   show_price: true,
   show_expire: true,
@@ -595,7 +555,6 @@ const settings = ref({
   custom_cu: '',
   custom_cm: '',
   custom_bd: '',
-  theme_url: '',
   csp_static: '',
   csp_api: ''
 })
@@ -793,10 +752,6 @@ const handleLogin = async () => {
 }
 
 const logout = async () => {
-  try {
-    await adminApiForSite({ action: 'clear_theme_preview_auth' })
-  } catch (_) {
-  }
   apiLogout()
   isLoggedIn.value = false
   latestAgentVersion.value = ''
@@ -893,7 +848,6 @@ const loadSettings = async () => {
         custom_head: settingsData.custom_head || '',
         custom_script: settingsData.custom_script || '',
         display_mode: resolveDisplayMode(settingsData),
-        theme_options: formatThemeOptions(settingsData.theme_options),
         is_public: settingsData.is_public === 'true',
         show_price: settingsData.show_price === 'true',
         show_expire: settingsData.show_expire === 'true',
@@ -918,7 +872,6 @@ const loadSettings = async () => {
         custom_cu: settingsData.custom_cu || '',
         custom_cm: settingsData.custom_cm || '',
         custom_bd: settingsData.custom_bd || '',
-        theme_url: settingsData.theme_url || '',
         csp_static: settingsData.csp_static || '',
         csp_api: settingsData.csp_api || ''
       }
@@ -987,12 +940,6 @@ const saveSettings = async () => {
     return
   }
 
-  const themeOptionsResult = parseThemeOptions(settings.value.theme_options)
-  if (!themeOptionsResult.valid) {
-    validationError.value = trans.value.invalidThemeOptionsFormat
-    return
-  }
-
   if (settingsPanelRef.value) {
     const cspStaticValid = settingsPanelRef.value.validateCspField('csp_static')
     const cspApiValid = settingsPanelRef.value.validateCspField('csp_api')
@@ -1012,9 +959,6 @@ const saveSettings = async () => {
       custom_head: settings.value.custom_head,
       custom_script: settings.value.custom_script,
       display_mode: normalizeDisplayMode(settings.value.display_mode),
-      appearance_options: {
-        theme_options: themeOptionsResult.value
-      },
       is_public: settings.value.is_public ? 'true' : 'false',
       show_price: settings.value.show_price ? 'true' : 'false',
       show_expire: settings.value.show_expire ? 'true' : 'false',

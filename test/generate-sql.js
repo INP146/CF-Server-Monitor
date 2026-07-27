@@ -101,7 +101,7 @@ const servers = [
   }
 ];
 
-let sql = `-- CF Server Monitor 模拟数据
+let sql = `-- EdgeProbe 模拟数据
 -- 生成时间: ${new Date().toISOString()}
 
 -- 清空现有数据（注意顺序：先删子表，再删主表）
@@ -189,8 +189,7 @@ const appearanceOptions = {
   custom_bg: 'https://cdn.nodeimage.com/i/fux0OSoFzVZQsn9uZmSDbIpKzZw2r8GW.webp',
   custom_head: '<meta content="test">',
   custom_script: 'console.log("Hello, World!");',
-  display_mode: 'bar',
-  theme_options: { a: 1, b: 2 }
+  display_mode: 'bar'
 };
 
 const siteOptions = {

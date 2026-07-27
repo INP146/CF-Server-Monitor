@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # V1.3.4
-# CF-Server-Monitor 安装/卸载脚本 (企业级安全加固版)
+# EdgeProbe 安装/卸载脚本 (企业级安全加固版)
 # 支持: Ubuntu/Debian/CentOS/RHEL/Fedora/Rocky/AlmaLinux
 # Fixes: 1. 独立协程无 wait 阻塞 2. 原子化原子覆盖 3. 兼容全版本 Systemd 4. 严格 set -u 闭环
 # ==============================================================================
@@ -36,7 +36,7 @@ RUNTIME_MODE="systemd"
 
 print_banner() {
     echo -e "${CYAN}╔═══════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║     CF-Server-Monitor (Enterprise)    ║${NC}"
+    echo -e "${CYAN}║        EdgeProbe (Enterprise)         ║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════╝${NC}"
 }
 
@@ -1077,7 +1077,7 @@ if [ -z "${SERVER_ID:-}" ] || [ -z "${SECRET:-}" ] || [ -z "${WORKER_URL:-}" ]; 
     exit 1
 fi
 
-log_info "CF-Server-Monitor Probe Engine Started Successfully."
+log_info "EdgeProbe Probe Engine Started Successfully."
 log_debug "Config: id=${SERVER_ID} url=${WORKER_URL} report_interval=${REPORT_INTERVAL}s collect_interval=${COLLECT_INTERVAL}s active_interval=${ACTIVE_INTERVAL}s reset_day=${RESET_DAY} auto_update=${AUTO_UPDATE} secret_len=${#SECRET}"
 log_debug "Nodes: ct=${CT_NODE:-} cu=${CU_NODE:-} cm=${CM_NODE:-} bd=${BD_NODE:-}"
 
@@ -1341,7 +1341,7 @@ create_service() {
     
     cat > "${SERVICE_FILE}" << EOF
 [Unit]
-Description=CF Server Monitor Probe Agent
+Description=EdgeProbe Probe Agent
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -1589,7 +1589,7 @@ EOF
     start_service
 
     echo -e "\n${GREEN}======================================================="
-    echo -e "         CF-Server-Monitor ${AGENT_VERSION} 安装成功"
+    echo -e "         EdgeProbe ${AGENT_VERSION} 安装成功"
     echo -e "=======================================================${NC}"
     echo -e "  服务状态 : ${GREEN}Active (Running)${NC}"
     echo -e "  配置参数 :"

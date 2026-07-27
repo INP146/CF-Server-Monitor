@@ -1,21 +1,31 @@
+import { isRecord } from '../types/domain.js';
+
 const LATEST_REPORT_TTL_MS = 5 * 60 * 1000;
 const MAX_LATEST_REPORT_SERVERS = 1000;
 
 // 普通 Worker isolate 内的尽力而为缓存；不同 isolate 之间不共享。
-const latestReportUpdates = new Map();
+interface LatestReportUpdate {
+  serverId: string;
+  reportTs: number;
+  latestSampleTs: number;
+  samples: unknown[];
+}
 
-function normalizeTimestamp(value, fallback = 0) {
+const latestReportUpdates = new Map<string, LatestReportUpdate>();
+
+function normalizeTimestamp(value: unknown, fallback = 0): number {
   const timestamp = Number(value);
   if (!Number.isFinite(timestamp) || timestamp <= 0) return fallback;
   return timestamp < 10000000000 ? timestamp * 1000 : timestamp;
 }
 
-function getLatestSampleTimestamp(samples) {
+function getLatestSampleTimestamp(samples: unknown): number {
   if (!Array.isArray(samples)) return 0;
   let latest = 0;
   for (const sample of samples) {
-    if (!sample || typeof sample !== 'object') continue;
-    const data = sample.data || sample.payload || sample.metrics || {};
+    if (!isRecord(sample)) continue;
+    const dataValue = sample.data || sample.payload || sample.metrics;
+    const data = isRecord(dataValue) ? dataValue : {};
     const timestamp = normalizeTimestamp(
       sample.ts ?? sample.timestamp ?? data.sample_timestamp ?? data.last_updated ?? data.timestamp,
       0
@@ -33,7 +43,7 @@ function pruneLatestReportUpdates(now = Date.now()) {
   }
 }
 
-export function cacheLatestReportUpdate(serverId, samples, reportTs = Date.now()) {
+export function cacheLatestReportUpdate(serverId: unknown, samples: unknown[], reportTs = Date.now()): void {
   if (!serverId || !Array.isArray(samples) || samples.length === 0) return;
 
   const now = Date.now();
@@ -69,11 +79,11 @@ export function cacheLatestReportUpdate(serverId, samples, reportTs = Date.now()
   }
 }
 
-export function getWorkerLatestReportUpdates(serverIds, now = Date.now()) {
+export function getWorkerLatestReportUpdates(serverIds: unknown[], now = Date.now()) {
   pruneLatestReportUpdates(now);
   if (!Array.isArray(serverIds)) return [];
 
-  const updates = [];
+  const updates: Array<Omit<LatestReportUpdate, 'latestSampleTs'> & { reportAgeMs: number }> = [];
   for (const serverId of serverIds) {
     const update = latestReportUpdates.get(String(serverId));
     if (!update) continue;
@@ -86,6 +96,6 @@ export function getWorkerLatestReportUpdates(serverIds, now = Date.now()) {
   return updates;
 }
 
-export function getLatestReportSampleTimestamp(update) {
-  return getLatestSampleTimestamp(update?.samples);
+export function getLatestReportSampleTimestamp(update: unknown): number {
+  return getLatestSampleTimestamp(isRecord(update) ? update.samples : undefined);
 }

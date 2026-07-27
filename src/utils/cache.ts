@@ -9,19 +9,20 @@
  */
 
 import { clearAppearanceSettingsCache, clearSiteSettingsCache, debug } from './settings.js';
+import type { DataRecord, MetricRecord, ServerRecord } from '../types/domain.js';
 
 const SERVERS_LIST_TTL = 120 * 1000;
-let serversListCache = null;
+let serversListCache: { data: ServerRecord[]; time: number } | null = null;
 
 const LATEST_ALL_TTL = 30 * 1000;
-let latestAllCache = null;
+let latestAllCache: Map<string, MetricRecord> | null = null;
 let latestAllCacheTime = 0;
 
-const metricsHistoryCache = new Map();
+const metricsHistoryCache = new Map<string, { data: DataRecord[]; timestamp: number }>();
 
-const serverDetailCache = new Map();
+const serverDetailCache = new Map<string, { data: ServerRecord | null; time: number }>();
 
-export function getCacheDuration(hours) {
+export function getCacheDuration(hours: number): number {
   if (hours >= 120) {
     return 10 * 60 * 1000;
   } else if (hours >= 60) {
@@ -33,7 +34,7 @@ export function getCacheDuration(hours) {
   }
 }
 
-function filterServersByHidden(servers, includeHidden) {
+function filterServersByHidden(servers: ServerRecord[] | null | undefined, includeHidden: boolean): ServerRecord[] {
   if (!servers || servers.length === 0) return [];
   if (includeHidden) {
     return [...servers];
@@ -41,7 +42,7 @@ function filterServersByHidden(servers, includeHidden) {
   return servers.filter(s => s.is_hidden !== 1 && s.is_hidden !== '1');
 }
 
-export async function getAllServers(db, includeHidden = true) {
+export async function getAllServers(db: D1Database, includeHidden = true): Promise<ServerRecord[]> {
   const now = Date.now();
   
   if (serversListCache && now - serversListCache.time < SERVERS_LIST_TTL) {
@@ -50,7 +51,7 @@ export async function getAllServers(db, includeHidden = true) {
   }
 
   try {
-    const { results } = await db.prepare('SELECT * FROM servers ORDER BY sort_order ASC').all();
+    const { results } = await db.prepare('SELECT * FROM servers ORDER BY sort_order ASC').all<ServerRecord>();
     serversListCache = { data: results, time: now };
     debug('服务器列表缓存更新');
     return filterServersByHidden(results, includeHidden);
@@ -69,7 +70,11 @@ export function clearServerDetailCache() {
   serverDetailCache.clear();
 }
 
-export async function getServerDetail(db, id, includeHidden = false) {
+export async function getServerDetail(
+  db: D1Database,
+  id: string,
+  includeHidden = false
+): Promise<ServerRecord | null> {
   const now = Date.now();
   const cached = serverDetailCache.get(id);
   
@@ -92,7 +97,7 @@ export async function getServerDetail(db, id, includeHidden = false) {
     serverDetailCache.delete(id);
   }
   
-  const server = await db.prepare('SELECT * FROM servers WHERE id = ?').bind(id).first();
+  const server = await db.prepare('SELECT * FROM servers WHERE id = ?').bind(id).first<ServerRecord>();
 
   serverDetailCache.set(id, { data: server, time: now });
   debug('服务器详情缓存更新');
@@ -108,7 +113,7 @@ export async function getServerDetail(db, id, includeHidden = false) {
   return { ...server };
 }
 
-export async function checkServerExists(db, id) {
+export async function checkServerExists(db: D1Database, id: string): Promise<boolean> {
   const server = await getServerDetail(db, id, true);
   return !!server;
 }
@@ -121,7 +126,7 @@ export function getLatestMetricsCache() {
   return { cache: latestAllCache, time: latestAllCacheTime, ttl: LATEST_ALL_TTL };
 }
 
-export function setLatestMetricsCache(data) {
+export function setLatestMetricsCache(data: Map<string, MetricRecord>): void {
   latestAllCache = data;
   latestAllCacheTime = Date.now();
 }
@@ -131,22 +136,27 @@ export function clearLatestMetricsCache() {
   latestAllCacheTime = 0;
 }
 
-function getCacheKey(serverId, hours, columns) {
+function getCacheKey(serverId: string, hours: number, columns: string): string {
   const sortedColumns = columns.split(',').sort().join(',');
   return `${serverId}:${hours}:${sortedColumns}`;
 }
 
-export function getMetricsHistoryCache(serverId, hours, columns) {
+export function getMetricsHistoryCache(serverId: string, hours: number, columns: string) {
   const key = getCacheKey(serverId, hours, columns);
   return metricsHistoryCache.get(key);
 }
 
-export function setMetricsHistoryCache(serverId, hours, columns, data) {
+export function setMetricsHistoryCache(
+  serverId: string,
+  hours: number,
+  columns: string,
+  data: DataRecord[]
+): void {
   const key = getCacheKey(serverId, hours, columns);
   metricsHistoryCache.set(key, { data, timestamp: Date.now() });
 }
 
-export function clearMetricsHistoryCache(serverId) {
+export function clearMetricsHistoryCache(serverId: string): void {
   for (const key of metricsHistoryCache.keys()) {
     if (key.startsWith(`${serverId}:`)) {
       metricsHistoryCache.delete(key);

@@ -1,14 +1,26 @@
 const ALGORITHM = { name: 'HMAC', hash: 'SHA-256' };
 import { verifyPasswordHash } from '../utils/common.js';
 import { isValidJwtSecret } from '../utils/settings.js';
+import type { SiteSettings } from '../utils/settings.js';
+import { isRecord } from '../types/domain.js';
 
-async function generateKeyFromSecret(secret) {
+interface HeaderRequest {
+  headers: { get(name: string): string | null };
+}
+
+interface JwtPayload {
+  sub?: string;
+  iat?: number;
+  exp?: number;
+}
+
+async function generateKeyFromSecret(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const keyData = encoder.encode(secret);
   return await crypto.subtle.importKey('raw', keyData, ALGORITHM, false, ['sign', 'verify']);
 }
 
-async function signJwt(payload, secret) {
+async function signJwt(payload: JwtPayload, secret: string): Promise<string> {
   const header = { alg: 'HS256', typ: 'JWT' };
   const encodedHeader = btoa(JSON.stringify(header)).replace(/=/g, '');
   const encodedPayload = btoa(JSON.stringify(payload)).replace(/=/g, '');
@@ -25,7 +37,7 @@ async function signJwt(payload, secret) {
   return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
 }
 
-async function verifyJwt(token, secret) {
+async function verifyJwt(token: string, secret: string): Promise<JwtPayload | null> {
   try {
     const parts = token.split('.');
     if (parts.length !== 3) {
@@ -48,29 +60,34 @@ async function verifyJwt(token, secret) {
       return null;
     }
     
-    const payload = JSON.parse(atob(encodedPayload));
+    const payload: unknown = JSON.parse(atob(encodedPayload));
+    if (!isRecord(payload)) return null;
     
-    if (payload.exp && Date.now() > payload.exp * 1000) {
+    if (typeof payload.exp === 'number' && Date.now() > payload.exp * 1000) {
       return null;
     }
     
-    return payload;
+    return {
+      sub: typeof payload.sub === 'string' ? payload.sub : undefined,
+      iat: typeof payload.iat === 'number' ? payload.iat : undefined,
+      exp: typeof payload.exp === 'number' ? payload.exp : undefined
+    };
   } catch (e) {
     console.error('JWT verification error:', e);
     return null;
   }
 }
 
-function getJwtSecret(env, sys) {
+function getJwtSecret(env: Env, sys: SiteSettings | null): string {
   if (isValidJwtSecret(sys?.jwt_secret)) {
-    return sys.jwt_secret;
+    return String(sys?.jwt_secret);
   }
 
   const fallback = env.API_SECRET || 'default_jwt_secret_for_server_monitor';
   return fallback.padEnd(32, 'x').substring(0, 64);
 }
 
-export async function generateToken(env, sys) {
+export async function generateToken(env: Env, sys: SiteSettings | null): Promise<string> {
   const payload = {
     sub: 'admin',
     iat: Math.floor(Date.now() / 1000),
@@ -81,7 +98,11 @@ export async function generateToken(env, sys) {
   return signJwt(payload, secret);
 }
 
-export async function checkAuth(request, env, sys) {
+export async function checkAuth(
+  request: HeaderRequest,
+  env: Env,
+  sys: SiteSettings | null
+): Promise<boolean> {
   const authHeader = request.headers.get('Authorization');
   if (!authHeader) {
     return false;
@@ -106,7 +127,11 @@ export async function checkAuth(request, env, sys) {
   }
 }
 
-export async function validateCredentials(request, env, sys) {
+export async function validateCredentials(
+  request: HeaderRequest,
+  env: Env,
+  sys: SiteSettings | null
+) {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader) {

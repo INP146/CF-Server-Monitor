@@ -1,5 +1,10 @@
+import { errorMessage } from '../types/domain.js';
+
 export class AppError extends Error {
-  constructor(message, code = 500, details = null) {
+  readonly code: number;
+  readonly details: unknown;
+
+  constructor(message: string, code = 500, details: unknown = null) {
     super(message);
     this.name = 'AppError';
     this.code = code;
@@ -7,18 +12,20 @@ export class AppError extends Error {
   }
 }
 
-export function createErrorResponse(error, logError = true) {
+export function createErrorResponse(error: unknown, logError = true) {
+  const normalizedError = error instanceof Error ? error : new Error(errorMessage(error));
+
   if (logError) {
-    if (error instanceof AppError) {
-      console.error(`[Error] ${error.code}: ${error.message}`, error.details || '');
+    if (normalizedError instanceof AppError) {
+      console.error(`[Error] ${normalizedError.code}: ${normalizedError.message}`, normalizedError.details || '');
     } else {
-      console.error('[Error] Unexpected:', error.message, error.stack);
+      console.error('[Error] Unexpected:', normalizedError.message, normalizedError.stack);
     }
   }
 
-  const code = error instanceof AppError ? error.code : 500;
-  const message = error instanceof AppError 
-    ? error.message 
+  const code = normalizedError instanceof AppError ? normalizedError.code : 500;
+  const message = normalizedError instanceof AppError
+    ? normalizedError.message
     : 'Internal Server Error';
 
   return new Response(JSON.stringify({ 
@@ -30,7 +37,7 @@ export function createErrorResponse(error, logError = true) {
   });
 }
 
-export function createSuccessResponse(data, headers = {}) {
+export function createSuccessResponse(data: unknown, headers: HeadersInit = {}) {
   const defaultHeaders = { 'Content-Type': 'application/json' };
   return new Response(JSON.stringify(data), {
     status: 200,

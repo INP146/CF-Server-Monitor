@@ -1,4 +1,4 @@
-export const DEFAULT_SITE_TITLE = 'Cloudflare Server Monitor'
+export const DEFAULT_SITE_TITLE = 'EdgeProbe'
 
 export const TIME = {
   ONLINE_THRESHOLD_MS: 300000,

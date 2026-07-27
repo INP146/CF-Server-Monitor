@@ -16,11 +16,13 @@ import {
   serializeCorrection,
   shouldSendAgentUpdate
 } from '../utils/agentConfig.js';
+import { errorMessage, isRecord } from '../types/domain.js';
+import type { BroadcastSample, DataRecord, MetricSample } from '../types/domain.js';
 
 // 将最新一次上报打包成前端可直接消费的 "当前状态" 对象
 // 与 /api/server 和 /api/servers 返回的字段保持一致，便于页面直接合并
-function buildPayloadForBroadcast(id, metrics = {}, extra = {}) {
-  const payload = {};
+function buildPayloadForBroadcast(id: string, metrics: DataRecord = {}, extra: DataRecord = {}): DataRecord {
+  const payload: DataRecord = {};
   mergeMetricsIntoServer(payload, metrics);
   payload.id = id;
   payload.region = extra.region || '';
@@ -33,19 +35,19 @@ function buildPayloadForBroadcast(id, metrics = {}, extra = {}) {
 // 批量推送：5秒窗口内合并向 DO 推送一次，减少请求次数
 const BATCH_WINDOW = 5000;
 const MAX_BATCH_SAMPLES = 300;
-let batchQueue = new Map();
-let flushingPromise = null;
+let batchQueue = new Map<string, { samples: BroadcastSample[] }>();
+let flushingPromise: Promise<void> | null = null;
 
 // 用于过滤不需要实时更新的字段
 const BROADCAST_DELETE_FIELDS = ['id', 'name', 'region', 'arch', 'os', 'kernel_version', 'cpu_info', 'cpu_cores', 'expire_date', 'server_group', 'traffic_limit', 'net_rx_monthly', 'net_tx_monthly', 'boot_time', 'timestamp', 'ip_v4', 'ip_v6'];
 
-function normalizeTimestamp(value, fallback = Date.now()) {
+function normalizeTimestamp(value: unknown, fallback = Date.now()): number {
   const ts = Number(value);
   if (!Number.isFinite(ts) || ts <= 0) return fallback;
   return ts < 10000000000 ? ts * 1000 : ts;
 }
 
-function normalizeAgentVersion(value) {
+function normalizeAgentVersion(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value)
     .trim()
@@ -53,7 +55,7 @@ function normalizeAgentVersion(value) {
     .slice(0, 64);
 }
 
-function createAgentInstructionResponse(body) {
+function createAgentInstructionResponse(body: string): Response {
   return new Response(body, {
     status: 200,
     headers: {
@@ -63,30 +65,32 @@ function createAgentInstructionResponse(body) {
   });
 }
 
-function logUpdateBadRequest(reason, details = {}) {
+function logUpdateBadRequest(reason: string, details: DataRecord = {}): void {
   console.warn('[Update] 400 Bad Request:', reason, details);
 }
 
-function normalizeCorrectionValue(value) {
+function normalizeCorrectionValue(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return 0;
   return isValidTrafficCorrection(value) ? Number(value) : null;
 }
 
-function normalizeMetricSamples(data) {
+function normalizeMetricSamples(data: DataRecord): MetricSample[] {
   const now = Date.now();
   const rawSamples = Array.isArray(data.samples)
     ? data.samples
     : (Array.isArray(data.batch) ? data.batch : []);
 
-  const samples = rawSamples.map(item => {
-    if (!item || typeof item !== 'object') return null;
-    const metrics = item.metrics || item.data || item.payload || item;
-    if (!metrics || typeof metrics !== 'object') return null;
+  const samples: MetricSample[] = [];
+  for (const item of rawSamples) {
+    if (!isRecord(item)) continue;
+    const metricsValue = item.metrics || item.data || item.payload || item;
+    if (!isRecord(metricsValue)) continue;
+    const metrics = metricsValue;
     const ts = normalizeTimestamp(item.ts ?? item.timestamp ?? metrics.timestamp, now);
-    return { ts, metrics };
-  }).filter(Boolean);
+    samples.push({ ts, metrics });
+  }
 
-  if (samples.length === 0 && data.metrics && typeof data.metrics === 'object') {
+  if (samples.length === 0 && isRecord(data.metrics)) {
     samples.push({
       ts: normalizeTimestamp(data.metrics.timestamp, now),
       metrics: data.metrics
@@ -97,7 +101,12 @@ function normalizeMetricSamples(data) {
   return samples.slice(-MAX_BATCH_SAMPLES);
 }
 
-function toBroadcastSamples(id, samples, regionCode, agentVersion = '') {
+function toBroadcastSamples(
+  id: string,
+  samples: MetricSample[],
+  regionCode: string,
+  agentVersion = ''
+): BroadcastSample[] {
   return samples.map(sample => {
     const payload = buildPayloadForBroadcast(id, sample.metrics || {}, {
       region: regionCode,
@@ -110,7 +119,7 @@ function toBroadcastSamples(id, samples, regionCode, agentVersion = '') {
   });
 }
 
-function queueBroadcastSamples(serverId, samples) {
+function queueBroadcastSamples(serverId: string, samples: BroadcastSample[]): void {
   if (!serverId || !Array.isArray(samples) || samples.length === 0) return;
   const existing = batchQueue.get(serverId);
   const merged = existing && Array.isArray(existing.samples)
@@ -119,7 +128,7 @@ function queueBroadcastSamples(serverId, samples) {
   batchQueue.set(serverId, { samples: merged.slice(-MAX_BATCH_SAMPLES) });
 }
 
-async function _flushBatch(env) {
+async function _flushBatch(env: Env): Promise<void> {
   flushingPromise = null;
 
   if (batchQueue.size === 0) return;
@@ -128,14 +137,10 @@ async function _flushBatch(env) {
   const queue = batchQueue;
   batchQueue = new Map();
 
-  const updates = [];
+  const updates: Array<{ serverId: string; samples: BroadcastSample[] }> = [];
   for (const [serverId, item] of queue) {
-    if (item && Array.isArray(item.samples) && item.samples.length > 0) {
+    if (item.samples.length > 0) {
       updates.push({ serverId, samples: item.samples });
-    } else if (item) {
-      const filtered = Object.assign({}, item);
-      BROADCAST_DELETE_FIELDS.forEach(field => delete filtered[field]);
-      updates.push({ serverId, payload: filtered });
     }
   }
 
@@ -150,11 +155,11 @@ async function _flushBatch(env) {
       body: JSON.stringify({ updates })
     });
   } catch (e) {
-    console.warn('[broadcast] batch push failed:', e.message || e);
+    console.warn('[broadcast] batch push failed:', errorMessage(e));
   }
 }
 
-function _ensureBatchFlush(env) {
+function _ensureBatchFlush(env: Env): Promise<void> {
   if (flushingPromise) return flushingPromise;
 
   flushingPromise = new Promise(resolve => setTimeout(resolve, BATCH_WINDOW))
@@ -163,16 +168,25 @@ function _ensureBatchFlush(env) {
   return flushingPromise;
 }
 
-export async function handleUpdate(request, env, ctx) {
+export async function handleUpdate(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<Response> {
   try {
-    const data = await request.json();
-    const { id, secret } = data;
+    const body: unknown = await request.json();
+    if (!isRecord(body)) return createBadRequestResponse('Invalid payload');
+    const data = body;
+    const id = typeof data.id === 'string' ? data.id : '';
+    const secret = typeof data.secret === 'string' ? data.secret : '';
+
+    if (!id) return createBadRequestResponse('Missing ID');
 
     if (secret !== env.API_SECRET) {
       return createUnauthorizedResponse('Invalid secret');
     }
 
-    let regionCode = request.cf?.country || request.headers?.get('cf-ipcountry') || '';
+    const regionCode = String(request.cf?.country || request.headers.get('cf-ipcountry') || '');
     const agentVersion = normalizeAgentVersion(request.headers.get('X-Agent-Version'));
 
     const serverDetail = await getServerDetail(env.DB, id, true);
@@ -210,7 +224,7 @@ export async function handleUpdate(request, env, ctx) {
     // 从缓存中获取历史记录分区 ID
     const historyPartitionId = serverDetail.history_partition_id;
     if(!historyPartitionId) {
-      await ensureServerOptimization(env.DB, id);
+      await ensureServerOptimization(env.DB);
       logUpdateBadRequest('Missing history_partition_id', {
         id,
         history_partition_id: serverDetail.history_partition_id
@@ -298,7 +312,7 @@ export async function handleUpdate(request, env, ctx) {
         }
       });
     } catch (configError) {
-      console.warn('[Update] Failed to build agent configuration:', configError?.message || configError);
+      console.warn('[Update] Failed to build agent configuration:', errorMessage(configError));
       if (shouldUpdateAgent) {
         return createAgentInstructionResponse('update=1');
       }
@@ -313,7 +327,7 @@ export async function handleUpdate(request, env, ctx) {
 }
 
 // 暴露给 index.js 路由使用的 WebSocket 接入函数
-export async function handleWebSocketUpgrade(request, env) {
+export async function handleWebSocketUpgrade(request: Request, env: Env): Promise<Response> {
   if (!env || !env.METRICS_BROADCASTER) {
     return new Response(JSON.stringify({ error: 'WebSocket not enabled', code: 503 }), {
       status: 503,

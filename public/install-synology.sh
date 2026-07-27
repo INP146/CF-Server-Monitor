@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # V1.3.4
-# CF-Server-Monitor 安装/卸载脚本 (Synology 群晖专用版)
+# EdgeProbe 安装/卸载脚本 (Synology 群晖专用版)
 # 支持: Synology DSM 6.x / 7.x (BusyBox 环境适配)
 # 与 install.sh 功能一致，针对群晖系统做了路径、服务管理、命令兼容性适配
 # ==============================================================================
@@ -37,7 +37,7 @@ RUNTIME_MODE="synology"
 
 print_banner() {
     echo -e "${CYAN}╔═══════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║  CF-Server-Monitor (Synology Edition) ║${NC}"
+    echo -e "${CYAN}║     EdgeProbe (Synology Edition)      ║${NC}"
     echo -e "${CYAN}╚═══════════════════════════════════════╝${NC}"
 }
 
@@ -1064,7 +1064,7 @@ if [ -z "${SERVER_ID:-}" ] || [ -z "${SECRET:-}" ] || [ -z "${WORKER_URL:-}" ]; 
     exit 1
 fi
 
-log_info "CF-Server-Monitor Probe Engine (Synology) Started Successfully."
+log_info "EdgeProbe Probe Engine (Synology) Started Successfully."
 log_debug "Config: id=${SERVER_ID} url=${WORKER_URL} report_interval=${REPORT_INTERVAL}s collect_interval=${COLLECT_INTERVAL}s active_interval=${ACTIVE_INTERVAL}s reset_day=${RESET_DAY} auto_update=${AUTO_UPDATE} secret_len=${#SECRET}"
 log_debug "Nodes: ct=${CT_NODE:-} cu=${CU_NODE:-} cm=${CM_NODE:-} bd=${BD_NODE:-}"
 
@@ -1335,9 +1335,9 @@ create_service() {
 
     cat > "${RC_FILE}" << EOF
 #!/bin/sh
-# CF-Server-Monitor Synology RC Script
+# EdgeProbe Synology RC Script
 # chkconfig: 2345 99 01
-# description: CF Server Monitor Probe Agent
+# description: EdgeProbe Probe Agent
 
 NAME="${SERVICE_NAME}"
 SCRIPT="${SCRIPT_FILE}"
@@ -1619,7 +1619,7 @@ EOF
     start_service
 
     echo -e "\n${GREEN}======================================================="
-    echo -e "    CF-Server-Monitor ${AGENT_VERSION} (Synology) 安装成功"
+    echo -e "    EdgeProbe ${AGENT_VERSION} (Synology) 安装成功"
     echo -e "=======================================================${NC}"
     echo -e "  服务状态 : ${GREEN}Active (Running)${NC}"
     echo -e "  配置参数 :"

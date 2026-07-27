@@ -17,7 +17,7 @@
         role="tooltip"
       >{{ updateTitle }}</span>
     </span>
-    <span>Powered by <a href="https://github.com/huilang-me/CF-Server-Monitor" target="_blank">CF-Server-Monitor</a></span>
+    <span>Powered by <a href="https://github.com/INP146/EdgeProbe" target="_blank">EdgeProbe</a></span>
   </footer>
 </template>
 

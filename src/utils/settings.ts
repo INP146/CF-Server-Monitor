@@ -1,9 +1,12 @@
-const CURRENT_VERSION = '2.8.0 Beta1';
-export const AGENT_VERSION = '1.3.4';
-export const DEFAULT_SITE_TITLE = 'Cloudflare Server Monitor';
-export const APPEARANCE_FIELDS = ['site_title', 'custom_bg', 'custom_head', 'custom_script', 'csp_static', 'csp_api', 'display_mode', 'theme_options'];
+import { isRecord } from '../types/domain.js';
+import type { DataRecord } from '../types/domain.js';
 
-export const SITE_FIELDS = ['is_public', 'show_price', 'show_expire', 'show_tf', 'show_time', 'show_long_history', 'tg_notify', 'tg_bot_token', 'tg_chat_id', 'turnstile_enabled', 'turnstile_login_enabled', 'turnstile_site_key', 'turnstile_secret_key', 'jwt_secret', 'username', 'password', 'cloudflare_account_id', 'cloudflare_token', 'custom_ct', 'custom_cu', 'custom_cm', 'custom_bd', 'expire_reminder', 'theme_url', 'history_id_optimized','servers_optimized'];
+const CURRENT_VERSION = '3.0.0-beta.1';
+export const AGENT_VERSION = '1.3.4';
+export const DEFAULT_SITE_TITLE = 'EdgeProbe';
+export const APPEARANCE_FIELDS = ['site_title', 'custom_bg', 'custom_head', 'custom_script', 'csp_static', 'csp_api', 'display_mode'];
+
+export const SITE_FIELDS = ['is_public', 'show_price', 'show_expire', 'show_tf', 'show_time', 'show_long_history', 'tg_notify', 'tg_bot_token', 'tg_chat_id', 'turnstile_enabled', 'turnstile_login_enabled', 'turnstile_site_key', 'turnstile_secret_key', 'jwt_secret', 'username', 'password', 'cloudflare_account_id', 'cloudflare_token', 'custom_ct', 'custom_cu', 'custom_cm', 'custom_bd', 'expire_reminder', 'history_id_optimized','servers_optimized'];
 
 const SITE_SETTINGS_TTL = 120 * 1000;
 const JWT_SECRET_MIN_LENGTH = 32;
@@ -12,12 +15,49 @@ const CURRENT_CUSTOM_BD = 'ip.zstaticcdn.com';
 export const TG_NOTIFY_MINUTES_MIN = 2;
 export const TG_NOTIFY_MINUTES_MAX = 30;
 export const TG_NOTIFY_LEGACY_TRUE_MINUTES = 5;
-let cachedSiteSettings = null;
+
+export interface SiteSettings {
+  [key: string]: unknown;
+  site_title: string;
+  custom_bg: string;
+  custom_head: string;
+  custom_script: string;
+  csp_static: string;
+  csp_api: string;
+  display_mode: string;
+  is_public: string;
+  show_price: string;
+  show_expire: string;
+  show_tf: string;
+  show_time: string;
+  show_long_history: string;
+  tg_notify: string;
+  tg_bot_token: string;
+  tg_chat_id: string;
+  turnstile_enabled: string | boolean;
+  turnstile_login_enabled: string | boolean;
+  turnstile_site_key: string;
+  turnstile_secret_key: string;
+  jwt_secret: string;
+  username?: string;
+  password?: string;
+  cloudflare_account_id: string;
+  cloudflare_token: string;
+  custom_ct: string;
+  custom_cu: string;
+  custom_cm: string;
+  custom_bd: string;
+  expire_reminder: string;
+  history_id_optimized: string;
+  servers_optimized: string;
+}
+
+let cachedSiteSettings: SiteSettings | null = null;
 let siteSettingsCacheExpiry = 0;
-let cachedAppearanceOptions = null;
+let cachedAppearanceOptions: DataRecord | null = null;
 let appearanceOptionsCacheExpiry = 0;
 
-const defaults = {
+const defaults: SiteSettings = {
   site_title: DEFAULT_SITE_TITLE,
   custom_bg: '',
   custom_head: '',
@@ -25,7 +65,6 @@ const defaults = {
   csp_static: '',
   csp_api: '',
   display_mode: 'bar',
-  theme_options: {},
   is_public: 'true',
   show_price: 'true',
   show_expire: 'true',
@@ -47,12 +86,11 @@ const defaults = {
   custom_cm: 'gd-cm-dualstack.ip.zstaticcdn.com',
   custom_bd: 'ip.zstaticcdn.com',
   expire_reminder: 'false',
-  theme_url: '',
   history_id_optimized: 'false',
   servers_optimized: 'false'
 };
 
-export function normalizeTgNotify(value) {
+export function normalizeTgNotify(value: unknown): string {
   if (value === true || value === 'true') return String(TG_NOTIFY_LEGACY_TRUE_MINUTES);
   if (
     value === false ||
@@ -75,7 +113,7 @@ export function normalizeTgNotify(value) {
   return '0';
 }
 
-export function getTgNotifyMinutes(value) {
+export function getTgNotifyMinutes(value: unknown): number {
   return Number(normalizeTgNotify(value));
 }
 
@@ -89,21 +127,22 @@ export function generateRandomSecret(byteLength = 32) {
   return result;
 }
 
-export function isValidJwtSecret(secret) {
+export function isValidJwtSecret(secret: unknown): secret is string {
   return typeof secret === 'string' && secret.length >= JWT_SECRET_MIN_LENGTH;
 }
 
-function tryParseJSON(str) {
-  if (!str) return null;
+function tryParseJSON(str: unknown): DataRecord | null {
+  if (typeof str !== 'string' || !str) return null;
   try {
-    return JSON.parse(str);
+    const parsed: unknown = JSON.parse(str);
+    return isRecord(parsed) ? parsed : null;
   } catch (e) {
     return null;
   }
 }
 
-function copyFields(target, source, fields) {
-  if (!source || typeof source !== 'object') return;
+function copyFields(target: DataRecord, source: unknown, fields: readonly string[]): void {
+  if (!isRecord(source)) return;
   for (const field of fields) {
     if (source[field] !== undefined) {
       target[field] = source[field];
@@ -111,26 +150,26 @@ function copyFields(target, source, fields) {
   }
 }
 
-function normalizeCustomBd(value) {
-  return value === LEGACY_CUSTOM_BD ? CURRENT_CUSTOM_BD : value;
+function normalizeCustomBd(value: unknown): string {
+  return value === LEGACY_CUSTOM_BD ? CURRENT_CUSTOM_BD : String(value ?? '');
 }
 
-export function normalizeDisplayMode(value, fallback = 'bar') {
+export function normalizeDisplayMode(value: unknown, fallback = 'bar'): string {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === 'list') return 'table';
   if (mode === 'bar' || mode === 'ring' || mode === 'table') return mode;
   return fallback === 'ring' || fallback === 'table' ? fallback : 'bar';
 }
 
-function hasMissingFields(source, fields) {
-  if (!source || typeof source !== 'object') return true;
+function hasMissingFields(source: unknown, fields: readonly string[]): boolean {
+  if (!isRecord(source)) return true;
   return fields.some(field => source[field] === undefined);
 }
 
-async function loadLegacySettings(db, fields) {
-  const legacy = {};
+async function loadLegacySettings(db: D1Database, fields: readonly string[]): Promise<DataRecord> {
+  const legacy: DataRecord = {};
   const fieldSet = new Set(fields);
-  const { results } = await db.prepare('SELECT * FROM settings').all();
+  const { results } = await db.prepare('SELECT * FROM settings').all<{ key: string; value: string | null }>();
   if (results && results.length > 0) {
     results.forEach(r => {
       if (fieldSet.has(r.key)) {
@@ -141,7 +180,7 @@ async function loadLegacySettings(db, fields) {
   return legacy;
 }
 
-async function saveJwtSecretIfMissing(db, secret) {
+async function saveJwtSecretIfMissing(db: D1Database, secret: string): Promise<string> {
   await db.prepare(`
     INSERT INTO settings (key, value)
     VALUES ('site_options', json_object('jwt_secret', ?))
@@ -158,15 +197,19 @@ async function saveJwtSecretIfMissing(db, secret) {
 
   const siteRow = await db.prepare(
     "SELECT value FROM settings WHERE key = 'site_options'"
-  ).first();
+  ).first<{ value: string | null }>();
   const siteOptions = siteRow && siteRow.value
     ? tryParseJSON(siteRow.value)
     : null;
 
-  return isValidJwtSecret(siteOptions?.jwt_secret) ? siteOptions.jwt_secret : secret;
+  return isValidJwtSecret(siteOptions?.jwt_secret) ? String(siteOptions?.jwt_secret) : secret;
 }
 
-async function ensurePersistedJwtSecret(db, result, siteOptions) {
+async function ensurePersistedJwtSecret(
+  db: D1Database,
+  result: SiteSettings,
+  siteOptions: DataRecord | null
+): Promise<string> {
   if (isValidJwtSecret(siteOptions?.jwt_secret)) {
     return siteOptions.jwt_secret;
   }
@@ -178,7 +221,7 @@ async function ensurePersistedJwtSecret(db, result, siteOptions) {
   return saveJwtSecretIfMissing(db, secret);
 }
 
-export async function loadSiteSettings(db) {
+export async function loadSiteSettings(db: D1Database): Promise<SiteSettings> {
   const now = Date.now();
   if (cachedSiteSettings && now < siteSettingsCacheExpiry) {
     debug('Settings缓存命中');
@@ -186,13 +229,13 @@ export async function loadSiteSettings(db) {
   }
   debug('Settings缓存更新');
 
-  const result = { ...defaults };
-  let siteOptions = null;
+  const result: SiteSettings = { ...defaults };
+  let siteOptions: DataRecord | null = null;
 
   try {
     const siteRow = await db.prepare(
       "SELECT value FROM settings WHERE key = 'site_options'"
-    ).first();
+    ).first<{ value: string | null }>();
     if (siteRow) {
       const parsed = tryParseJSON(siteRow.value);
       if (parsed) {
@@ -230,7 +273,7 @@ export function clearSiteSettingsCache() {
   siteSettingsCacheExpiry = 0;
 }
 
-export async function loadAppearanceOptions(db) {
+export async function loadAppearanceOptions(db: D1Database): Promise<DataRecord> {
   const now = Date.now();
   if (cachedAppearanceOptions && now < appearanceOptionsCacheExpiry) {
     debug('Appearance缓存命中');
@@ -238,14 +281,14 @@ export async function loadAppearanceOptions(db) {
   }
   debug('Appearance缓存更新');
 
-  const result = {};
+  const result: DataRecord = {};
   copyFields(result, defaults, APPEARANCE_FIELDS);
-  let appearanceOptions = null;
+  let appearanceOptions: DataRecord | null = null;
 
   try {
     const appearanceRow = await db.prepare(
       "SELECT value FROM settings WHERE key = 'appearance_options'"
-    ).first();
+    ).first<{ value: string | null }>();
     if (appearanceRow) {
       const parsed = tryParseJSON(appearanceRow.value);
       if (parsed) {
@@ -273,7 +316,7 @@ export function clearAppearanceSettingsCache() {
   appearanceOptionsCacheExpiry = 0;
 }
 
-export async function loadSettings(db) {
+export async function loadSettings(db: D1Database): Promise<SiteSettings> {
   const [siteSettings, appearanceOptions] = await Promise.all([
     loadSiteSettings(db),
     loadAppearanceOptions(db)
@@ -281,10 +324,10 @@ export async function loadSettings(db) {
   return { ...defaults, ...siteSettings, ...appearanceOptions };
 }
 
-export async function saveSiteOptions(db, updates) {
+export async function saveSiteOptions(db: D1Database, updates: DataRecord): Promise<DataRecord> {
   const siteRow = await db.prepare(
     "SELECT value FROM settings WHERE key = 'site_options'"
-  ).first();
+  ).first<{ value: string | null }>();
   
   const existingSiteOptions = siteRow && siteRow.value
     ? tryParseJSON(siteRow.value) || {}
@@ -294,6 +337,7 @@ export async function saveSiteOptions(db, updates) {
     : {};
   
   const siteOptions = { ...legacySiteOptions, ...existingSiteOptions, ...updates };
+  delete siteOptions.theme_url;
   siteOptions.tg_notify = normalizeTgNotify(siteOptions.tg_notify);
   siteOptions.custom_bd = normalizeCustomBd(siteOptions.custom_bd);
   
@@ -305,7 +349,11 @@ export async function saveSiteOptions(db, updates) {
   return siteOptions;
 }
 
-export async function getSettingByKey(db, key, returnBoolean = false) {
+export async function getSettingByKey(
+  db: D1Database,
+  key: string,
+  returnBoolean = false
+): Promise<unknown> {
   const settings = await loadSiteSettings(db);
   if(returnBoolean){
     const value = String(settings[key] ?? '').trim().toLowerCase();
@@ -317,17 +365,17 @@ export async function getSettingByKey(db, key, returnBoolean = false) {
 
 let isDebugEnabled = false;
 
-export function setDebug(debug) {
+export function setDebug(debug: unknown): void {
   isDebugEnabled = debug === 1 || debug === '1' || debug === true;
   if(isDebugEnabled) console.log('DEBUG模式:', isDebugEnabled);
 }
 
-export function debug(...args) {
+export function debug(...args: unknown[]): void {
   if (isDebugEnabled) {
     console.debug('[DEBUG]', ...args);
   }
 }
 
-export function getCurrentVersion() {
+export function getCurrentVersion(): string {
   return CURRENT_VERSION;
 }

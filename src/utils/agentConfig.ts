@@ -11,7 +11,54 @@ const PING_NODE_HOST_PATTERN = /^[a-zA-Z0-9._-]+$/;
 const IPV4_PATTERN = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const IPV4_LIKE_PATTERN = /^(?:\d+\.){3}\d+$/;
 
-function validateInteger(name, value, allowedValues = null, min = null, max = null) {
+interface AgentConfigInput {
+  collect_interval: unknown;
+  report_interval: unknown;
+  reset_day: unknown;
+}
+
+interface AgentConfig {
+  collect_interval: number;
+  report_interval: number;
+  reset_day: number;
+  custom_ct: string;
+  custom_cu: string;
+  custom_cm: string;
+  custom_bd: string;
+  schema_version: number;
+}
+
+type ValidatedAgentConfig = {
+  collect_interval: number;
+  report_interval: number;
+  reset_day: number;
+  schema_version: number;
+};
+
+export type AgentConfigValidation =
+  | { valid: true; config: ValidatedAgentConfig }
+  | { valid: false; error: string };
+
+interface AgentSource {
+  [key: string]: unknown;
+  collect_interval?: unknown;
+  report_interval?: unknown;
+  reset_day?: unknown;
+  custom_ct?: unknown;
+  custom_cu?: unknown;
+  custom_cm?: unknown;
+  custom_bd?: unknown;
+  rx_correction?: unknown;
+  tx_correction?: unknown;
+}
+
+function validateInteger(
+  name: string,
+  value: unknown,
+  allowedValues: Set<number> | null = null,
+  min: number | null = null,
+  max: number | null = null
+) {
   if (typeof value !== 'number' || !Number.isInteger(value)) {
     return `${name} must be an integer`;
   }
@@ -23,7 +70,7 @@ function validateInteger(name, value, allowedValues = null, min = null, max = nu
   return null;
 }
 
-export function validateAgentConfigInput(input) {
+export function validateAgentConfigInput(input: AgentConfigInput): AgentConfigValidation {
   const collectError = validateInteger(
     'collect_interval',
     input.collect_interval,
@@ -41,13 +88,17 @@ export function validateAgentConfigInput(input) {
   const resetError = validateInteger('reset_day', input.reset_day, null, 0, 31);
   if (resetError) return { valid: false, error: resetError };
 
-  if (input.collect_interval > 0 && input.report_interval < input.collect_interval) {
+  const collectInterval = Number(input.collect_interval);
+  const reportInterval = Number(input.report_interval);
+  const resetDay = Number(input.reset_day);
+
+  if (collectInterval > 0 && reportInterval < collectInterval) {
     return { valid: false, error: 'report_interval must be greater than or equal to collect_interval' };
   }
 
   if (
-    input.collect_interval > 0 &&
-    Math.ceil(input.report_interval / input.collect_interval) > 300
+    collectInterval > 0 &&
+    Math.ceil(reportInterval / collectInterval) > 300
   ) {
     return { valid: false, error: 'configuration would create more than 300 samples per report' };
   }
@@ -55,20 +106,20 @@ export function validateAgentConfigInput(input) {
   return {
     valid: true,
     config: {
-      collect_interval: input.collect_interval,
-      report_interval: input.report_interval,
-      reset_day: input.reset_day,
+      collect_interval: collectInterval,
+      report_interval: reportInterval,
+      reset_day: resetDay,
       schema_version: AGENT_CONFIG_SCHEMA_VERSION
     }
   };
 }
 
-function storedInteger(value, allowedValues, fallback) {
+function storedInteger(value: unknown, allowedValues: Set<number>, fallback: number): number {
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isInteger(number) && allowedValues.has(number) ? number : fallback;
 }
 
-function normalizeAgentVersionForCompare(value) {
+function normalizeAgentVersionForCompare(value: unknown): string {
   if (value === null || value === undefined) return '';
   return String(value)
     .trim()
@@ -78,22 +129,22 @@ function normalizeAgentVersionForCompare(value) {
     .slice(0, 64);
 }
 
-export function isAgentAutoUpdateEnabled(value) {
+export function isAgentAutoUpdateEnabled(value: unknown): boolean {
   return String(value ?? '').trim() === '1';
 }
 
-export function shouldSendAgentUpdate(clientAgentVersion, latestAgentVersion) {
+export function shouldSendAgentUpdate(clientAgentVersion: unknown, latestAgentVersion: unknown): boolean {
   const current = normalizeAgentVersionForCompare(clientAgentVersion);
   const latest = normalizeAgentVersionForCompare(latestAgentVersion);
   return !!current && !!latest && current !== latest;
 }
 
-export function appendAgentUpdateParam(body, shouldUpdate) {
+export function appendAgentUpdateParam(body: string, shouldUpdate: boolean): string {
   if (!shouldUpdate) return body;
   return `${body ? `${body}&` : ''}update=1`;
 }
 
-function isValidIpv4(host) {
+function isValidIpv4(host: string): boolean {
   if (!IPV4_PATTERN.test(host)) return false;
   return host.split('.').every(part => {
     const number = Number(part);
@@ -101,7 +152,7 @@ function isValidIpv4(host) {
   });
 }
 
-function isValidHostname(host) {
+function isValidHostname(host: string): boolean {
   if (!PING_NODE_HOST_PATTERN.test(host) || host.length > 50) return false;
   if (IPV4_LIKE_PATTERN.test(host)) return false;
   if (host.startsWith('.') || host.endsWith('.') || host.includes('..')) return false;
@@ -111,7 +162,7 @@ function isValidHostname(host) {
   });
 }
 
-export function validatePingNode(value) {
+export function validatePingNode(value: unknown): { valid: boolean; value?: string } {
   const raw = String(value || '').trim();
   if (!raw) return { valid: true, value: '' };
   if (raw.length > 60 || raw.includes('://') || /[\s/@?#\\[\]]/.test(raw)) {
@@ -143,12 +194,12 @@ export function validatePingNode(value) {
   return { valid: false };
 }
 
-export function sanitizePingNode(value) {
+export function sanitizePingNode(value: unknown): string {
   const result = validatePingNode(value);
-  return result.valid ? result.value : '';
+  return result.valid && result.value ? result.value : '';
 }
 
-export function isValidTrafficCorrection(value) {
+export function isValidTrafficCorrection(value: unknown): boolean {
   let number;
   if (typeof value === 'number') {
     number = value;
@@ -160,11 +211,11 @@ export function isValidTrafficCorrection(value) {
   return Number.isFinite(number) && number >= 0 && number <= MAX_TRAFFIC_CORRECTION_GB;
 }
 
-export function normalizeTrafficCorrection(value) {
+export function normalizeTrafficCorrection(value: unknown): number {
   return isValidTrafficCorrection(value) ? Number(value) : 0;
 }
 
-export function buildAgentConfig(server, settings = null) {
+export function buildAgentConfig(server: AgentSource, settings: AgentSource | null = null): AgentConfig {
   const collectInterval = storedInteger(server?.collect_interval, ALLOWED_COLLECT_INTERVALS, 0);
   let reportInterval = storedInteger(server?.report_interval, ALLOWED_REPORT_INTERVALS, 60);
   if (collectInterval > 0 && reportInterval < collectInterval) reportInterval = 60;
@@ -193,7 +244,7 @@ export function buildAgentConfig(server, settings = null) {
   };
 }
 
-export function serializeAgentConfig(config) {
+export function serializeAgentConfig(config: AgentConfig): string {
   return `collect_interval=${config.collect_interval}` +
     `&report_interval=${config.report_interval}` +
     `&reset_day=${config.reset_day}` +
@@ -204,19 +255,19 @@ export function serializeAgentConfig(config) {
     `&custom_bd=${config.custom_bd}`;
 }
 
-export function serializeCorrection(correction) {
+export function serializeCorrection(correction: { rx_correction: number; tx_correction: number } | null): string {
   if (correction === null || correction === undefined) return '';
   return `&rx_correction=${correction.rx_correction}` +
     `&tx_correction=${correction.tx_correction}`;
 }
 
-export async function describeAgentConfig(server, settings = null) {
+export async function describeAgentConfig(server: AgentSource, settings: AgentSource | null = null) {
   const config = buildAgentConfig(server, settings);
   const serialized = serializeAgentConfig(config);
   const md5 = await md5Hash(serialized);
 
   const hasCorrection = server?.rx_correction != null || server?.tx_correction != null;
-  let correction = null;
+  let correction: { rx_correction: number; tx_correction: number } | null = null;
   if (hasCorrection) {
     correction = {
       rx_correction: normalizeTrafficCorrection(server.rx_correction),
