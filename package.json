@@ -1,7 +1,7 @@
 {
-  "name": "cf-server-monitor",
-  "version": "2.7.10",
-  "description": "Cloudflare Workers Server Monitor - 多服务器监控探针",
+  "name": "edgeprobe",
+  "version": "3.0.0-beta.1",
+  "description": "EdgeProbe - Cloudflare-native server monitoring",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -20,7 +20,15 @@
     "server",
     "probe"
   ],
-  "author": "",
+  "author": "INP146 and contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/INP146/EdgeProbe.git"
+  },
+  "bugs": {
+    "url": "https://github.com/INP146/EdgeProbe/issues"
+  },
+  "homepage": "https://github.com/INP146/EdgeProbe#readme",
   "license": "MIT",
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

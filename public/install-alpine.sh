@@ -1,7 +1,7 @@
 #!/bin/sh
 # ==============================================================================
 # V1.3.4
-# CF-Server-Monitor 安装/卸载脚本 (Alpine Linux 兼容版)
+# EdgeProbe 安装/卸载脚本 (Alpine Linux 兼容版)
 # 支持: Alpine Linux (OpenRC / 裸机 / Docker 容器)
 # Fixes: 1. 独立协程无 wait 阻塞 2. 原子化原子覆盖 3. 兼容 OpenRC/无 init 场景
 #        4. 严格 set -u 闭环 5. 自动安装 bash 保证探针脚本语法兼容
@@ -39,7 +39,7 @@ LOG_FILE="/var/log/${SERVICE_NAME}.log"
 # ---------------------------------------------------------------
 print_banner() {
     printf '%b╔═════════════════════════════════════╗%b\n' "${CYAN}" "${NC}"
-    printf '%b║     CF-Server-Monitor (Alpine)      ║%b\n' "${CYAN}" "${NC}"
+    printf '%b║         EdgeProbe (Alpine)          ║%b\n' "${CYAN}" "${NC}"
     printf '%b╚═════════════════════════════════════╝%b\n' "${CYAN}" "${NC}"
 }
 
@@ -1058,7 +1058,7 @@ OS=""; ARCH=""; KERNEL_VERSION=""; BOOT_TIME=0; CPU_INFO=""; CPU_CORES=1
 GPU_INFO_VALUE="null"; LOAD_AVG="0 0 0"; PROCESSES=0; TCP_CONN=0; UDP_CONN=0
 RX_MONTHLY=0; TX_MONTHLY=0
 
-echo "[INFO] CF-Server-Monitor Probe Engine Started Successfully."
+echo "[INFO] EdgeProbe Probe Engine Started Successfully."
 
 # 核心架构升级：在这里脱离主循环，静默启动常驻网络 Worker 协程，无 wait 干扰
 run_network_worker &
@@ -1282,9 +1282,9 @@ create_service() {
     
     cat > "${OPENRC_FILE}" << EOF
 #!/sbin/openrc-run
-# CF-Server-Monitor Probe Agent (Alpine Linux)
+# EdgeProbe Probe Agent (Alpine Linux)
 
-description="CF Server Monitor Probe Agent"
+description="EdgeProbe Probe Agent"
 command="/bin/bash"
 command_args="${SCRIPT_FILE}"
 command_background="yes"
@@ -1302,7 +1302,7 @@ EOF
     info "OpenRC 服务脚本生成: ${OPENRC_FILE}"
 
     echo "#!/bin/sh
-# CF-Server-Monitor 手动启停脚本（Alpine Linux）
+# EdgeProbe 手动启停脚本（Alpine Linux）
 START_CMD='/bin/bash ${SCRIPT_FILE} > ${LOG_FILE} 2>&1 &'
 PID_FILE='${PID_FILE}'
 LOG_FILE='${LOG_FILE}'
@@ -1539,7 +1539,7 @@ EOF
     start_service
 
     printf '\n%b=============================================%b\n' "${GREEN}" "${NC}"
-    printf  '         CF-Server-Monitor %s 安装成功\n' "${AGENT_VERSION}"
+    printf  '         EdgeProbe %s 安装成功\n' "${AGENT_VERSION}"
     printf  '%b=============================================%b\n' "${GREEN}" "${NC}"
     printf  '  服务状态 : %bActive (Running)%b\n' "${GREEN}" "${NC}"
     printf  '  配置参数 :\n'

@@ -1,10 +1,11 @@
-# [CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor)
+# [EdgeProbe](https://github.com/INP146/EdgeProbe)
 
 一个基于 Cloudflare Workers + D1 + Durable Objects 的多服务器监控探针系统，支持实时监控、历史数据查看、延迟追踪、地图展示等功能。兼容主流 Linux 系统、Alpine Linux、OpenWrt、macOS（Intel / Apple Silicon）、群晖、Windows 系统。
 
-**演示地址**：<https://demo.huilang.me/>
+**当前 Workers 版本：3.0.0-beta.1；Agent 版本：1.3.4**
 
-**当前Workers版本：V2.8.0 Beta1; Agent版本：1.3.4**
+为兼容 2.x 已安装节点，系统服务名 `cf-probe`、配置目录及 Windows 脚本文件名
+`cf-server-monitor.ps1` 暂时保持不变；这些标识不代表旧产品仍在并行运行。
 
 > [!IMPORTANT]
 > V2.7.10 加入了 CSP 内容安全策略。Workers 环境通过 HTTP Response Header 下发 CSP，默认只允许同源资源和必要的 Cloudflare/Google Fonts 资源；
@@ -18,11 +19,12 @@
 >
 > - 免费托管在 Cloudflare，稳定性比自己服务器还高，超出免费额度也不扣费。目前支持 60+ 台监控，调整成 120 秒上报间隔后可以翻倍。
 > - 安全：无 WebSSH、无命令下发、单向上报，没有所谓的“主控”；Workers 项目只是一个纯收集数据和展示的平台。
-> - 客户端只需一个非常简单的 [install.sh](https://github.com/huilang-me/CF-Server-Monitor/blob/main/public/install.sh) 脚本，不依赖 Go 之类的语言，原生支持，非常轻量。
+> - 客户端只需一个非常简单的 [install.sh](https://github.com/INP146/EdgeProbe/blob/main/public/install.sh) 脚本，不依赖 Go 之类的语言，原生支持，非常轻量。
 > - 其他探针该有的功能基本都有，后续将继续完善。
 
 <details>
 <summary>更新记录</summary>
+- V3.0.0-beta.1 更名为 EdgeProbe，建立独立版本线和上游审查流程。
 - V2.8.0 新增主题商店功能，支持一键切换主题。
 - 探针V1.3.4添加缓存机制减少资源消耗,新增内核版本指标字段
 - V2.7 版本进行了全面重构与功能增强：数据库层面将每日清理改为每月表轮换，减少 D1 消耗，同时优化数据结构使写入减半并支持 60+ 服务器监控；新增国内四线路丢包率监控及历史图表、GPU 字段展示、服务器到期提醒、多分区磁盘统计、计费与自动续费、tags/note 字段、iOS Scriptable 小组件等功能；通知层面新增钉钉、OneBot(QQ)、飞书、Bark 支持，并重构告警模块；交互层面新增环形图显示模式、服务器导入导出、批量推送（5秒/批）、服务器参数下发，优化 Ping 统计改为中位数；安全与兼容方面加入 CSP、JWT 自动生成、跨域配置、多站点验证码登录、macOS 修复，并简化安装流程；探针与运维方面优化客户端脚本减少流量消耗，新增 Agent 自动更新（默认关闭）、GitHub 自动同步及 Workers/Agent 版本升级提示，增加 OS 图标显示，压缩定时任务从 4 个减为 2 个以规避免费额度限制，并修复月度任务导致索引丢失等严重 Bug。
@@ -61,7 +63,7 @@
 - [GitHub 账户](https://github.com/)
 
 <details>
-<summary>方式一：Cloudflare Workers 连接GitHub仓库（推荐使用，方便同步）图文教程 -> https://huilang.me/cf-server-monitor-setup/</summary>
+<summary>方式一：Cloudflare Workers 连接 GitHub 仓库（推荐）</summary>
 
 ### 第一步：Fork 项目
 
@@ -73,7 +75,7 @@
 2. 进入 **[Workers & Pages](https://dash.cloudflare.com/?to=/:account/workers-and-pages)**
 3. 点击 **Create application**
 4. 选择 Continue with GitHub（第一次使用需要连接 GitHub 账户），选择本项目
-5. Project Name填写：`cf-server-monitor`
+5. Project Name 填写：`edgeprobe`
 6. Build command 填写：`npm run build:frontend`
 7. Deploy command 保留默认值：`npx wrangler deploy`
 8. 点击 **Deploy**，成功会在底部显示`✨ Success! Build completed.`
@@ -154,7 +156,7 @@
 
 1. 进入你的 GitHub 仓库页面
 2. 点击顶部的 **Actions** 标签
-3. 在左侧工作流列表中选择 **Deploy to Cloudflare Workers**
+3. 在左侧工作流列表中选择 **Deploy EdgeProbe Worker**
 4. 点击右侧的 **Run workflow** 按钮
 5. 选择分支（默认选择 `main`）
 6. 点击 **Run workflow** 开始部署
@@ -166,7 +168,7 @@
 <details>
 <summary>方式三：一键部署（比较简单，但不推荐，不方便更新）</summary>
 
-[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/huilang-me/CF-Server-Monitor)
+[![Deploy to Cloudflare Workers](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/INP146/EdgeProbe)
 
 新用户点击一键部署
 
@@ -234,43 +236,20 @@ https://你的项目名.你的子域.workers.dev/admin
 
 根据您使用的安装方式，选择对应的升级方法：
 
-### 方式一/方式二：Fork 后通过 GitHub 同步（推荐）
+### 方式一/方式二：从 EdgeProbe 正式版本升级（推荐）
 
-无论你使用 Cloudflare Workers 连接 GitHub 仓库，还是使用 GitHub Action 自动部署，升级方式相同：同步上游仓库即可。
+EdgeProbe 的可部署版本只发布在 `main`。无论使用 Cloudflare Workers 连接仓库还是
+GitHub Actions，更新 `main` 后都会触发对应的部署流程。
 
-#### 自动同步（推荐）
-
-建议启用自动同步功能，系统会每天自动同步上游仓库的最新代码：
-
-1. 进入你 Fork 的 GitHub 仓库页面
-2. 点击 **Actions** 标签
-3. 首次使用时，点击 **"I understand my workflows, go ahead and enable them"** 启用 Actions
-4. 找到 **Upstream Sync** 工作流，点击进入
-5. 点击 **Run workflow** 手动触发一次，确认同步正常工作
-
-启用后，系统每天 UTC 0:00（北京时间 8:00）会自动检测上游仓库是否有新提交，有则自动合并到你的 `main` 分支。
-
-> **注意**：如果同步失败，提示"由于上游仓库的 workflow 文件变更，导致 GitHub 自动暂停了本次自动更新"，请前往仓库页面点击 **Sync Fork** → **Update branch** 手动执行一次同步，然后再次启用 Actions。
-
-#### 手动同步
-
-如果需要立即同步，可以手动操作：
-
-1. 进入你 Fork 的 GitHub 仓库页面
-2. 点击 **Sync fork** → **Update branch** 同步上游更新
-
-或者在 **Actions** 标签页中点击 **Upstream Sync** → **Run workflow** 手动触发。
-
-**部署触发方式**：
-
-- **Cloudflare Workers 连接 GitHub 仓库**：同步后 Cloudflare 会自动检测到代码变更并重新部署
-- **GitHub Action 自动部署**：同步后 GitHub Actions 会自动触发部署，可在 **Actions** 标签页查看进度
+维护者通过 **Prepare EdgeProbe Upstream Sync** 工作流检查原项目的正式版本。上游提交
+只会进入 `sync/upstream-main`，必须经过 PR 审查和测试后才能合入 `dev`，不会直接覆盖
+生产分支。完整流程见 [BRANCHING.md](BRANCHING.md)。
 
 ### 方式三：一键部署
 
 一键部署方式升级较为麻烦，建议重新部署：
 
-1. 访问 [一键部署页面](https://deploy.workers.cloudflare.com/?url=https://github.com/huilang-me/CF-Server-Monitor)
+1. 访问 [一键部署页面](https://deploy.workers.cloudflare.com/?url=https://github.com/INP146/EdgeProbe)
 2. 选择已存在的项目进行更新
 3. 在 build command 中填入 `npm run build:frontend`
 4. 点击部署
@@ -532,7 +511,7 @@ Workers 环境下 CSP 会放在 HTTP Response Header 中返回，并同时设置
 使用方式：
 
 1. 在 iPhone 安装 [Scriptable](https://scriptable.app/)。
-2. 将 [scripts/ios-scriptable-widget.js](https://github.com/huilang-me/CF-Server-Monitor/raw/refs/heads/main/scripts/ios-scriptable-widget.js) 内容复制到 Scriptable 新脚本中。
+2. 将 [scripts/ios-scriptable-widget.js](https://github.com/INP146/EdgeProbe/raw/refs/heads/main/scripts/ios-scriptable-widget.js) 内容复制到 Scriptable 新脚本中。
 3. 修改脚本顶部的 `CONFIG.baseURL` 为你的站点地址，例如 `https://status.example.com`。
 4. 添加 Scriptable 小组件，选择该脚本。
 5. 在小组件的 **Parameter** 中填写服务器 ID，例如 `955bd53e-531f-4dc8-8705-dc204000fa98`，也可以写成 `id:955bd53e-531f-4dc8-8705-dc204000fa98`。
@@ -655,7 +634,7 @@ Workers 环境下 CSP 会放在 HTTP Response Header 中返回，并同时设置
 <summary>项目结构</summary>
 
 ```
-CF-Server-Monitor/
+EdgeProbe/
 ├── public/
 │   ├── cf-server-monitor.ps1   # Windows 探针脚本（PowerShell 版，零依赖）
 │   ├── install.sh              # 一键安装脚本 - systemd 系统 (Ubuntu/Debian/CentOS)
@@ -950,12 +929,9 @@ node test/api-check.js --help
 
 MIT License
 
-## 🌐 社区
-
-- [Telegram 群组](https://t.me/cfServerMonitor)
-
 ## 🙏 致谢
 
+- [huilang-me/CF-Server-Monitor](https://github.com/huilang-me/CF-Server-Monitor)（原始项目）
 - [CF-Server-Monitor-Pro](https://github.com/a63414262/CF-Server-Monitor-Pro)
 - [Cloudflare Workers](https://workers.cloudflare.com/)
 - [Vue 3](https://vuejs.org/)

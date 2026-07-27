@@ -7,7 +7,7 @@
         <div class="form-row">
           <div class="form-group flex-1">
             <label class="form-label">{{ trans.siteTitle }}</label>
-            <input type="text" v-model="settings.site_title" class="form-input" :placeholder="'Cloudflare Server Monitor'">
+            <input type="text" v-model="settings.site_title" class="form-input" :placeholder="'EdgeProbe'">
           </div>
 
           <div class="form-group  ">

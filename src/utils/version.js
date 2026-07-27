@@ -1,4 +1,4 @@
-const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/huilang-me/CF-Server-Monitor/refs/heads/main/version.json';
+const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/INP146/EdgeProbe/refs/heads/main/version.json';
 const REMOTE_VERSION_TTL = 5 * 60 * 1000;
 const REMOTE_VERSION_FAILURE_TTL = 30 * 1000;
 

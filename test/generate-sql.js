@@ -101,7 +101,7 @@ const servers = [
   }
 ];
 
-let sql = `-- CF Server Monitor 模拟数据
+let sql = `-- EdgeProbe 模拟数据
 -- 生成时间: ${new Date().toISOString()}
 
 -- 清空现有数据（注意顺序：先删子表，再删主表）

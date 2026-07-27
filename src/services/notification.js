@@ -38,7 +38,7 @@ async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
 
 export async function sendNotification(settings, msg) {
   if(!settings.tg_bot_token) return;
-  const title = "💌 Cloudflare Server Monitor";
+  const title = "💌 EdgeProbe";
   if(settings.tg_bot_token.indexOf("onebot:") == 0) {
     // OneBot 协议 (QQ 等)，私聊格式: onebot:http://127.0.0.1:3000/send_private_msg?access_token=xxx
     // 群聊格式: onebot:http://127.0.0.1:3000/send_group_msg?access_token=xxx
@@ -113,7 +113,7 @@ export async function sendNotification(settings, msg) {
         body: JSON.stringify({
           title: title,
           markdown: msg,
-          group: "Cloudflare Server Monitor"
+          group: "EdgeProbe"
         })
       });
     } catch (e) {

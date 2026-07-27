@@ -1,7 +1,7 @@
 #!/bin/bash
 # ==============================================================================
 # V1.3.4
-# CF-Server-Monitor 安装/卸载脚本 (macOS 适配版)
+# EdgeProbe 安装/卸载脚本 (macOS 适配版)
 # 支持: macOS Intel / macOS Apple Silicon (M1/M2/M3/M4)
 # ==============================================================================
 
@@ -29,7 +29,7 @@ MAX_TRAFFIC_CORRECTION_GB=1000000
 
 print_banner() {
     echo -e "${CYAN}╔═════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║   CF-Server-Monitor (macOS Edition) ║${NC}"
+    echo -e "${CYAN}║      EdgeProbe (macOS Edition)      ║${NC}"
     echo -e "${CYAN}╚═════════════════════════════════════╝${NC}"
 }
 
@@ -1084,7 +1084,7 @@ wait_for_network() {
     return 0
 }
 
-echo "[INFO] CF-Server-Monitor Probe Engine Starting..."
+echo "[INFO] EdgeProbe Probe Engine Starting..."
 echo "[INFO] Waiting for network availability..."
 wait_for_network
 echo "[INFO] Network ready, proceeding with initialization..."
@@ -1140,7 +1140,7 @@ else
     BOOT_TIME=0
 fi
 
-echo "[INFO] CF-Server-Monitor Probe Engine Started Successfully."
+echo "[INFO] EdgeProbe Probe Engine Started Successfully."
 
 run_network_worker &
 WORKER_PID=$!
@@ -1591,7 +1591,7 @@ EOF
     verify_install
 
     echo -e "\n${GREEN}============================================="
-    echo -e "         CF-Server-Monitor ${AGENT_VERSION} 安装成功"
+    echo -e "         EdgeProbe ${AGENT_VERSION} 安装成功"
     echo -e "=============================================${NC}"
     echo -e "  服务状态 : ${GREEN}Active (Running)${NC}"
     echo -e "  配置参数 :"

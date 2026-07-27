@@ -1,4 +1,4 @@
-name: Prepare Upstream Sync
+name: Prepare EdgeProbe Upstream Sync
 
 on:
   schedule:

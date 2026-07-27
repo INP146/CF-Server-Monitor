@@ -493,7 +493,7 @@ export async function handleAdminAPI(request, env, sys, loadFullSettings = null)
         return createBadRequestResponse('tgBotTokenRequired');
       }
       try {
-        const testMsg = `✅ **测试通知**\n\n这是一条来自 CF Server Monitor 的测试消息。\n\n**时间:** ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`;
+        const testMsg = `✅ **测试通知**\n\n这是一条来自 EdgeProbe 的测试消息。\n\n**时间:** ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`;
         const result = await sendNotification({ tg_bot_token, tg_chat_id: tg_chat_id || '' }, testMsg);
         if(result) {
           console.warn('Test notification failed:', result);

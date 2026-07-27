@@ -1,6 +1,6 @@
-# CF-Server-Monitor 全局 API 文档
+# EdgeProbe 全局 API 文档
 
-> 面向 CF-Server-Monitor 项目维护者和集成方的全局 REST / WebSocket API 参考。
+> 面向 EdgeProbe 项目维护者和集成方的全局 REST / WebSocket API 参考。
 > 本文档覆盖 Workers 全部公开端点、管理端端点、维护端点、鉴权机制、错误码、数据结构与 WebSocket 实时推送协议。
 >
 > **Base URL**：`https://<your-worker-domain>`（部署后由 Cloudflare Workers 提供）
@@ -381,7 +381,7 @@ CORS_ALLOWED_ORIGINS=https://status.example.com,https://admin.example.com
 
 ```json
 {
-  "version": "2.8.0 Beta",
+  "version": "3.0.0-beta.1",
   "is_public": true,
   "authorization": false,
   "turnstile_enabled": true,

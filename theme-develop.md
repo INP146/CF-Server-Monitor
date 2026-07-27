@@ -1,4 +1,4 @@
-# CF-Server-Monitor 第三方主题开发 API 文档
+# EdgeProbe 第三方主题开发 API 文档
 
 > 面向第三方主题开发作者的 API 参考。
 >
