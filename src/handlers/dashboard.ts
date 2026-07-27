@@ -8,6 +8,9 @@ import {
   getLatestReportSampleTimestamp,
   getWorkerLatestReportUpdates
 } from '../utils/latestReportCache.js';
+import type { ServerRecord } from '../types/domain.js';
+import type { SiteSettings } from '../utils/settings.js';
+import { errorMessage, isRecord } from '../types/domain.js';
 
 const LATEST_REPORT_ID_CHUNK_SIZE = 500;
 
@@ -18,8 +21,8 @@ interface LatestReportWire {
   reportAgeMs?: number;
 }
 
-function withoutPrivateServerFields(server) {
-  const item = { ...server };
+function withoutPrivateServerFields(server: ServerRecord): ServerRecord {
+  const item: ServerRecord = { ...server };
   delete item.bandwidth;
   delete item.note;
   delete item.auto_update;
@@ -42,13 +45,23 @@ async function getDurableLatestReportUpdates(env: Env, serverIds: string[]): Pro
         body: JSON.stringify({ serverIds: chunk })
       });
       if (!response.ok) continue;
-      const data = await response.json<{ updates?: LatestReportWire[] }>();
-      if (Array.isArray(data?.updates)) updates.push(...data.updates);
+      const data: unknown = await response.json();
+      if (!isRecord(data) || !Array.isArray(data.updates)) continue;
+      for (const update of data.updates) {
+        if (!isRecord(update) || typeof update.serverId !== 'string' || !Array.isArray(update.samples)) continue;
+        const reportTs = Number(update.reportTs);
+        if (!Number.isFinite(reportTs)) continue;
+        updates.push({
+          serverId: update.serverId,
+          samples: update.samples,
+          reportTs
+        });
+      }
     }
 
     return updates;
   } catch (e) {
-    console.warn('[Dashboard] Failed to read latest report updates:', e?.message || e);
+    console.warn('[Dashboard] Failed to read latest report updates:', errorMessage(e));
     return [];
   }
 }
@@ -57,8 +70,8 @@ function mergeLatestReportUpdates(
   serverIds: string[],
   durableUpdates: LatestReportWire[],
   workerUpdates: LatestReportWire[]
-) {
-  const merged = new Map();
+): LatestReportWire[] {
+  const merged = new Map<string, LatestReportWire>();
 
   for (const update of durableUpdates) {
     if (!update?.serverId || !Array.isArray(update.samples)) continue;
@@ -76,13 +89,19 @@ function mergeLatestReportUpdates(
   }
 
   const now = Date.now();
-  return serverIds.map(serverId => merged.get(String(serverId))).filter(Boolean).map(update => ({
-    ...update,
-    reportAgeMs: Math.max(0, now - Number(update.reportTs || now))
-  }));
+  const updates: LatestReportWire[] = [];
+  for (const serverId of serverIds) {
+    const update = merged.get(String(serverId));
+    if (!update) continue;
+    updates.push({
+      ...update,
+      reportAgeMs: Math.max(0, now - Number(update.reportTs || now))
+    });
+  }
+  return updates;
 }
 
-export async function handleServerAPI(request, env, sys) {
+export async function handleServerAPI(request: Request, env: Env, sys: SiteSettings): Promise<Response> {
   const isLoggedIn = await checkAuth(request, env, sys);
   
   if (sys.is_public !== 'true' && !isLoggedIn) {
@@ -106,7 +125,7 @@ export async function handleServerAPI(request, env, sys) {
   return createSuccessResponse(withoutPrivateServerFields(server));
 }
 
-export async function handleServersAPI(request, env, sys) {
+export async function handleServersAPI(request: Request, env: Env, sys: SiteSettings): Promise<Response> {
   const isLoggedIn = await checkAuth(request, env, sys);
   
   if (sys.is_public !== 'true' && !isLoggedIn) {
@@ -134,7 +153,7 @@ export async function handleServersAPI(request, env, sys) {
   const now = Date.now();
   let globalOnline = 0;
   let globalSpeedIn = 0, globalSpeedOut = 0, globalNetTx = 0, globalNetRx = 0;
-  const regionStats = {};
+  const regionStats: Record<string, number> = {};
   
   for (const server of results) {
     const latestMetrics = latestMetricsMap.get(server.id);
@@ -148,14 +167,14 @@ export async function handleServersAPI(request, env, sys) {
     
     if (isOnline) {
       globalOnline++;
-      globalSpeedIn += parseFloat(server.net_in_speed) || 0;
-      globalSpeedOut += parseFloat(server.net_out_speed) || 0;
+      globalSpeedIn += parseFloat(String(server.net_in_speed ?? '')) || 0;
+      globalSpeedOut += parseFloat(String(server.net_out_speed ?? '')) || 0;
     }
     
-    globalNetRx += parseFloat(server.net_rx || 0);
-    globalNetTx += parseFloat(server.net_tx || 0);
+    globalNetRx += parseFloat(String(server.net_rx || 0));
+    globalNetTx += parseFloat(String(server.net_tx || 0));
     
-    let cCode = (server.region || '').toUpperCase();
+    const cCode = String(server.region || '').toUpperCase();
     if (cCode !== '') {
       regionStats[cCode] = (regionStats[cCode] || 0) + 1;
     }

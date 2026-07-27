@@ -14,6 +14,7 @@ import { verifyTurnstileToken } from './utils/common.js';
 import { getCorsAllowedOrigins, createOptionsResponse, applyCors } from './utils/cors.js';
 import { getRemoteVersion } from './utils/version.js';
 import type { SiteSettings } from './utils/settings.js';
+import { errorMessage } from './types/domain.js';
 // Durable Objects: 实时指标广播
 // 显式 import + extends，确保 wrangler 静态分析器能在入口文件直接识别此 DO 类
 import { MetricsBroadcaster as _MetricsBroadcaster }
@@ -173,7 +174,7 @@ async function fetchHistoryData(
   try {
     data = await getMetricsHistory(env.DB, id, clampedHours, columns, server);
   } catch (e) {
-    const message = e && e.message ? e.message : String(e);
+    const message = errorMessage(e);
     if (/no such column/i.test(message)) {
       debug('[History] 数据库字段缺失，可能尚未升级数据库:', message);
       return new Response(JSON.stringify({
@@ -255,7 +256,7 @@ export default {
 
     // /api/config 在不带 X-Turnstile-Token 且不带 X-Turnstile-Verified 时仍然 bypass（用于初始化判断是否需要验证），
     // 带 token 或 verified header 时则走完整验证流程，以便复用 verified 字段返回验证结果
-    const isTurnstileBypassed = (reqPath) => {
+    const isTurnstileBypassed = (reqPath: string) => {
       if (bypassTurnstilePaths.includes(reqPath)) return true;
       if (reqPath === '/api/config' && !request.headers.get('X-Turnstile-Token') && !request.headers.get('X-Turnstile-Verified')) return true;
       return false;
@@ -311,7 +312,7 @@ export default {
           const stub = env.METRICS_BROADCASTER.get(id);
           return await stub.fetch('http://internal/health');
         } catch (e) {
-          return createSuccessResponse({ ok: false, reason: e.message });
+          return createSuccessResponse({ ok: false, reason: errorMessage(e) });
         }
       }},
       { method: 'GET', path: '/api/config', handler: async () => {

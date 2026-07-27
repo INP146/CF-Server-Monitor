@@ -1,3 +1,6 @@
+import { isRecord } from '../types/domain.js';
+import type { DataRecord } from '../types/domain.js';
+
 const CURRENT_VERSION = '3.0.0-beta.1';
 export const AGENT_VERSION = '1.3.4';
 export const DEFAULT_SITE_TITLE = 'EdgeProbe';
@@ -53,7 +56,7 @@ export interface SiteSettings {
 
 let cachedSiteSettings: SiteSettings | null = null;
 let siteSettingsCacheExpiry = 0;
-let cachedAppearanceOptions: Partial<SiteSettings> | null = null;
+let cachedAppearanceOptions: DataRecord | null = null;
 let appearanceOptionsCacheExpiry = 0;
 
 const defaults: SiteSettings = {
@@ -91,7 +94,7 @@ const defaults: SiteSettings = {
   servers_optimized: 'false'
 };
 
-export function normalizeTgNotify(value) {
+export function normalizeTgNotify(value: unknown): string {
   if (value === true || value === 'true') return String(TG_NOTIFY_LEGACY_TRUE_MINUTES);
   if (
     value === false ||
@@ -114,7 +117,7 @@ export function normalizeTgNotify(value) {
   return '0';
 }
 
-export function getTgNotifyMinutes(value) {
+export function getTgNotifyMinutes(value: unknown): number {
   return Number(normalizeTgNotify(value));
 }
 
@@ -128,24 +131,22 @@ export function generateRandomSecret(byteLength = 32) {
   return result;
 }
 
-export function isValidJwtSecret(secret) {
+export function isValidJwtSecret(secret: unknown): secret is string {
   return typeof secret === 'string' && secret.length >= JWT_SECRET_MIN_LENGTH;
 }
 
-function tryParseJSON(str): Partial<SiteSettings> | null {
-  if (!str) return null;
+function tryParseJSON(str: unknown): DataRecord | null {
+  if (typeof str !== 'string' || !str) return null;
   try {
     const parsed: unknown = JSON.parse(str);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
-      ? parsed as Partial<SiteSettings>
-      : null;
+    return isRecord(parsed) ? parsed : null;
   } catch (e) {
     return null;
   }
 }
 
-function copyFields(target, source, fields) {
-  if (!source || typeof source !== 'object') return;
+function copyFields(target: DataRecord, source: unknown, fields: readonly string[]): void {
+  if (!isRecord(source)) return;
   for (const field of fields) {
     if (source[field] !== undefined) {
       target[field] = source[field];
@@ -153,26 +154,26 @@ function copyFields(target, source, fields) {
   }
 }
 
-function normalizeCustomBd(value) {
-  return value === LEGACY_CUSTOM_BD ? CURRENT_CUSTOM_BD : value;
+function normalizeCustomBd(value: unknown): string {
+  return value === LEGACY_CUSTOM_BD ? CURRENT_CUSTOM_BD : String(value ?? '');
 }
 
-export function normalizeDisplayMode(value, fallback = 'bar') {
+export function normalizeDisplayMode(value: unknown, fallback = 'bar'): string {
   const mode = String(value || '').trim().toLowerCase();
   if (mode === 'list') return 'table';
   if (mode === 'bar' || mode === 'ring' || mode === 'table') return mode;
   return fallback === 'ring' || fallback === 'table' ? fallback : 'bar';
 }
 
-function hasMissingFields(source, fields) {
-  if (!source || typeof source !== 'object') return true;
+function hasMissingFields(source: unknown, fields: readonly string[]): boolean {
+  if (!isRecord(source)) return true;
   return fields.some(field => source[field] === undefined);
 }
 
-async function loadLegacySettings(db, fields) {
-  const legacy = {};
+async function loadLegacySettings(db: D1Database, fields: readonly string[]): Promise<DataRecord> {
+  const legacy: DataRecord = {};
   const fieldSet = new Set(fields);
-  const { results } = await db.prepare('SELECT * FROM settings').all();
+  const { results } = await db.prepare('SELECT * FROM settings').all<{ key: string; value: string | null }>();
   if (results && results.length > 0) {
     results.forEach(r => {
       if (fieldSet.has(r.key)) {
@@ -183,7 +184,7 @@ async function loadLegacySettings(db, fields) {
   return legacy;
 }
 
-async function saveJwtSecretIfMissing(db, secret) {
+async function saveJwtSecretIfMissing(db: D1Database, secret: string): Promise<string> {
   await db.prepare(`
     INSERT INTO settings (key, value)
     VALUES ('site_options', json_object('jwt_secret', ?))
@@ -200,7 +201,7 @@ async function saveJwtSecretIfMissing(db, secret) {
 
   const siteRow = await db.prepare(
     "SELECT value FROM settings WHERE key = 'site_options'"
-  ).first();
+  ).first<{ value: string | null }>();
   const siteOptions = siteRow && siteRow.value
     ? tryParseJSON(siteRow.value)
     : null;
@@ -208,7 +209,11 @@ async function saveJwtSecretIfMissing(db, secret) {
   return isValidJwtSecret(siteOptions?.jwt_secret) ? String(siteOptions?.jwt_secret) : secret;
 }
 
-async function ensurePersistedJwtSecret(db, result, siteOptions) {
+async function ensurePersistedJwtSecret(
+  db: D1Database,
+  result: SiteSettings,
+  siteOptions: DataRecord | null
+): Promise<string> {
   if (isValidJwtSecret(siteOptions?.jwt_secret)) {
     return siteOptions.jwt_secret;
   }
@@ -220,7 +225,7 @@ async function ensurePersistedJwtSecret(db, result, siteOptions) {
   return saveJwtSecretIfMissing(db, secret);
 }
 
-export async function loadSiteSettings(db): Promise<SiteSettings> {
+export async function loadSiteSettings(db: D1Database): Promise<SiteSettings> {
   const now = Date.now();
   if (cachedSiteSettings && now < siteSettingsCacheExpiry) {
     debug('Settings缓存命中');
@@ -228,13 +233,13 @@ export async function loadSiteSettings(db): Promise<SiteSettings> {
   }
   debug('Settings缓存更新');
 
-  const result = { ...defaults };
-  let siteOptions: Partial<SiteSettings> | null = null;
+  const result: SiteSettings = { ...defaults };
+  let siteOptions: DataRecord | null = null;
 
   try {
     const siteRow = await db.prepare(
       "SELECT value FROM settings WHERE key = 'site_options'"
-    ).first();
+    ).first<{ value: string | null }>();
     if (siteRow) {
       const parsed = tryParseJSON(siteRow.value);
       if (parsed) {
@@ -272,7 +277,7 @@ export function clearSiteSettingsCache() {
   siteSettingsCacheExpiry = 0;
 }
 
-export async function loadAppearanceOptions(db): Promise<Partial<SiteSettings>> {
+export async function loadAppearanceOptions(db: D1Database): Promise<DataRecord> {
   const now = Date.now();
   if (cachedAppearanceOptions && now < appearanceOptionsCacheExpiry) {
     debug('Appearance缓存命中');
@@ -280,14 +285,14 @@ export async function loadAppearanceOptions(db): Promise<Partial<SiteSettings>> 
   }
   debug('Appearance缓存更新');
 
-  const result: Partial<SiteSettings> = {};
+  const result: DataRecord = {};
   copyFields(result, defaults, APPEARANCE_FIELDS);
-  let appearanceOptions: Partial<SiteSettings> | null = null;
+  let appearanceOptions: DataRecord | null = null;
 
   try {
     const appearanceRow = await db.prepare(
       "SELECT value FROM settings WHERE key = 'appearance_options'"
-    ).first();
+    ).first<{ value: string | null }>();
     if (appearanceRow) {
       const parsed = tryParseJSON(appearanceRow.value);
       if (parsed) {
@@ -315,7 +320,7 @@ export function clearAppearanceSettingsCache() {
   appearanceOptionsCacheExpiry = 0;
 }
 
-export async function loadSettings(db): Promise<SiteSettings> {
+export async function loadSettings(db: D1Database): Promise<SiteSettings> {
   const [siteSettings, appearanceOptions] = await Promise.all([
     loadSiteSettings(db),
     loadAppearanceOptions(db)
@@ -323,10 +328,10 @@ export async function loadSettings(db): Promise<SiteSettings> {
   return { ...defaults, ...siteSettings, ...appearanceOptions };
 }
 
-export async function saveSiteOptions(db, updates) {
+export async function saveSiteOptions(db: D1Database, updates: DataRecord): Promise<DataRecord> {
   const siteRow = await db.prepare(
     "SELECT value FROM settings WHERE key = 'site_options'"
-  ).first();
+  ).first<{ value: string | null }>();
   
   const existingSiteOptions = siteRow && siteRow.value
     ? tryParseJSON(siteRow.value) || {}
@@ -347,7 +352,11 @@ export async function saveSiteOptions(db, updates) {
   return siteOptions;
 }
 
-export async function getSettingByKey(db, key, returnBoolean = false) {
+export async function getSettingByKey(
+  db: D1Database,
+  key: string,
+  returnBoolean = false
+): Promise<unknown> {
   const settings = await loadSiteSettings(db);
   if(returnBoolean){
     const value = String(settings[key] ?? '').trim().toLowerCase();
@@ -359,17 +368,17 @@ export async function getSettingByKey(db, key, returnBoolean = false) {
 
 let isDebugEnabled = false;
 
-export function setDebug(debug) {
+export function setDebug(debug: unknown): void {
   isDebugEnabled = debug === 1 || debug === '1' || debug === true;
   if(isDebugEnabled) console.log('DEBUG模式:', isDebugEnabled);
 }
 
-export function debug(...args) {
+export function debug(...args: unknown[]): void {
   if (isDebugEnabled) {
     console.debug('[DEBUG]', ...args);
   }
 }
 
-export function getCurrentVersion() {
+export function getCurrentVersion(): string {
   return CURRENT_VERSION;
 }

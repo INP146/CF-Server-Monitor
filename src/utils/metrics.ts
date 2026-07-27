@@ -1,17 +1,19 @@
+import type { DataRecord } from '../types/domain.js';
+
 const PROBE_METRIC_FIELDS = [
   'ping_ct', 'ping_cu', 'ping_cm', 'ping_bd',
   'loss_ct', 'loss_cu', 'loss_cm', 'loss_bd'
 ];
 
-export function isDisabledProbeMetric(value) {
+export function isDisabledProbeMetric(value: unknown): boolean {
   return value === false || value === 'false';
 }
 
-function normalizeProbeMetric(value) {
+function normalizeProbeMetric(value: unknown): unknown {
   return isDisabledProbeMetric(value) ? false : value;
 }
 
-export function normalizeProbeMetricRow(metrics) {
+export function normalizeProbeMetricRow<T extends DataRecord | null>(metrics: T): T {
   if (!metrics) return metrics;
 
   const normalized = { ...metrics };
@@ -20,10 +22,10 @@ export function normalizeProbeMetricRow(metrics) {
       normalized[field] = normalizeProbeMetric(normalized[field]);
     }
   }
-  return normalized;
+  return normalized as T;
 }
 
-export function mergeMetricsIntoServer(server, metrics) {
+export function mergeMetricsIntoServer(server: DataRecord, metrics: DataRecord | null | undefined): void {
   if (!metrics) return;
 
   server.cpu = metrics.cpu || 0;

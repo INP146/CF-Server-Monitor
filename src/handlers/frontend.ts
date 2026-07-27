@@ -15,7 +15,13 @@ const PREVIEW_AUTH_COOKIE = 'cfsm_theme_preview_auth';
 
 let filesCache: Record<string, string> | null = null;
 
-async function loadFrontendFiles(env) {
+interface ParsedThemeUrl {
+  themeUrl: string;
+  rawBase: string;
+  cacheBase: string;
+}
+
+async function loadFrontendFiles(env: Env): Promise<Record<string, string>> {
   if (filesCache) return filesCache;
 
   try {
@@ -47,7 +53,7 @@ async function loadFrontendFiles(env) {
   }
 }
 
-function escapeHtml(str) {
+function escapeHtml(str: unknown): string {
   return String(str)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -56,14 +62,14 @@ function escapeHtml(str) {
     .replace(/'/g, '&#39;');
 }
 
-function insertBeforeHeadClose(html, content) {
+function insertBeforeHeadClose(html: string, content: string): string {
   if (/<\/head>/i.test(html)) {
     return html.replace(/<\/head>/i, `${content}\n</head>`);
   }
   return `${content}\n${html}`;
 }
 
-function injectTitle(html, title) {
+function injectTitle(html: string, title: unknown): string {
   const safeTitle = escapeHtml(title || DEFAULT_SITE_TITLE);
   if (/<title>.*?<\/title>/is.test(html)) {
     return html.replace(/<title>.*?<\/title>/is, `<title>${safeTitle}</title>`);
@@ -71,7 +77,7 @@ function injectTitle(html, title) {
   return insertBeforeHeadClose(html, `<title>${safeTitle}</title>`);
 }
 
-function injectAppearanceSettings(html, settings) {
+function injectAppearanceSettings(html: string, settings: SiteSettings): { html: string; csp: string } {
   let modifiedHtml = stripCspMeta(html);
 
   modifiedHtml = injectTitle(modifiedHtml, settings.site_title || DEFAULT_SITE_TITLE);
@@ -105,7 +111,7 @@ function injectAppearanceSettings(html, settings) {
   };
 }
 
-function getContentType(path) {
+function getContentType(path: string): string {
   const cleanPath = String(path || '').split('?')[0].toLowerCase();
   if (cleanPath.endsWith('.html')) return 'text/html;charset=UTF-8';
   if (cleanPath.endsWith('.js') || cleanPath.endsWith('.mjs')) return 'application/javascript;charset=UTF-8';
@@ -126,7 +132,7 @@ function getContentType(path) {
   return 'application/octet-stream';
 }
 
-function normalizeThemeUrl(value) {
+function normalizeThemeUrl(value: unknown): string {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
@@ -154,7 +160,7 @@ function normalizeThemeUrl(value) {
   }
 }
 
-function parseThemeUrl(themeUrl) {
+function parseThemeUrl(themeUrl: unknown): ParsedThemeUrl | null {
   const normalized = normalizeThemeUrl(themeUrl);
   if (!normalized) return null;
 
@@ -175,7 +181,7 @@ function parseThemeUrl(themeUrl) {
   };
 }
 
-function getCookie(request, name) {
+function getCookie(request: Request, name: string): string {
   const cookie = request.headers.get('Cookie') || '';
   for (const part of cookie.split(';')) {
     const [key, ...valueParts] = part.trim().split('=');
@@ -186,7 +192,7 @@ function getCookie(request, name) {
   return '';
 }
 
-function getPreviewThemeUrlFromCookie(request) {
+function getPreviewThemeUrlFromCookie(request: Request): string {
   const value = getCookie(request, PREVIEW_COOKIE);
   if (!value) return '';
   try {
@@ -196,24 +202,24 @@ function getPreviewThemeUrlFromCookie(request) {
   }
 }
 
-function buildPreviewCookie(request, themeUrl) {
+function buildPreviewCookie(request: Request, themeUrl: string): string {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return `${PREVIEW_COOKIE}=${encodeURIComponent(themeUrl)}; Max-Age=${THEME_CACHE_TTL}; Path=/; SameSite=Lax${secure}`;
 }
 
-function buildClearPreviewCookie(request) {
+function buildClearPreviewCookie(request: Request): string {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return `${PREVIEW_COOKIE}=; Max-Age=0; Path=/; SameSite=Lax${secure}`;
 }
 
-async function checkPreviewAuth(request, env, settings) {
+async function checkPreviewAuth(request: Request, env: Env, settings: SiteSettings): Promise<boolean> {
   const token = getCookie(request, PREVIEW_AUTH_COOKIE);
   if (!token) return false;
 
   try {
     const authRequest = {
       headers: {
-        get: (key) => {
+        get: (key: string) => {
           if (String(key).toLowerCase() === 'authorization') {
             return `Bearer ${decodeURIComponent(token)}`;
           }
@@ -227,12 +233,12 @@ async function checkPreviewAuth(request, env, settings) {
   }
 }
 
-function getPreviewThemeUrlFromQuery(url) {
+function getPreviewThemeUrlFromQuery(url: URL): string {
   if (!url.searchParams.has('theme_url')) return '';
   return normalizeThemeUrl(url.searchParams.get('theme_url'));
 }
 
-function normalizeAssetPath(pathname) {
+function normalizeAssetPath(pathname: string): string {
   const raw = pathname.slice('/assets/'.length);
   if (!raw) return '';
 
@@ -247,11 +253,11 @@ function normalizeAssetPath(pathname) {
   }
 }
 
-function normalizeThemeAssetUrls(html) {
+function normalizeThemeAssetUrls(html: string): string {
   return html.replace(/\b(src|href)=(["'])\.?\/?assets\//gi, '$1=$2/assets/');
 }
 
-function stripBrowserCacheHeaders(response) {
+function stripBrowserCacheHeaders(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.delete('Cache-Control');
   headers.delete('CDN-Cache-Control');
@@ -265,7 +271,11 @@ function stripBrowserCacheHeaders(response) {
   });
 }
 
-async function fetchWithCache(rawUrl, contentType, workerCacheUrl) {
+async function fetchWithCache(
+  rawUrl: string,
+  contentType: string,
+  workerCacheUrl: string
+): Promise<Response> {
   const cacheKey = new Request(workerCacheUrl || rawUrl, { method: 'GET' });
   const cache = typeof caches !== 'undefined'
     ? (caches as CacheStorage & { default: Cache }).default
@@ -310,7 +320,7 @@ async function fetchWithCache(rawUrl, contentType, workerCacheUrl) {
   return stripBrowserCacheHeaders(response);
 }
 
-async function serveThemeAsset(request, themeUrl) {
+async function serveThemeAsset(request: Request, themeUrl: string): Promise<Response> {
   const parsedTheme = parseThemeUrl(themeUrl);
   const url = new URL(request.url);
   const assetPath = normalizeAssetPath(url.pathname);
@@ -341,7 +351,7 @@ async function serveThemeAsset(request, themeUrl) {
   });
 }
 
-async function loadThemeIndex(themeUrl) {
+async function loadThemeIndex(themeUrl: string): Promise<string | null> {
   const parsedTheme = parseThemeUrl(themeUrl);
   if (!parsedTheme) return null;
 
@@ -355,7 +365,12 @@ async function loadThemeIndex(themeUrl) {
   return normalizeThemeAssetUrls(await response.text());
 }
 
-function buildHtmlResponse(html, settings, request, previewThemeUrl = '') {
+function buildHtmlResponse(
+  html: string,
+  settings: SiteSettings,
+  request: Request,
+  previewThemeUrl = ''
+): Response {
   const rendered = injectAppearanceSettings(html, settings);
   const headers = new Headers({
     'Content-Type': 'text/html;charset=UTF-8',
@@ -383,7 +398,7 @@ function buildThemeIndexErrorResponse() {
   });
 }
 
-function buildPreviewUnauthorizedResponse(request, isAsset = false) {
+function buildPreviewUnauthorizedResponse(request: Request, isAsset = false): Response {
   const headers = new Headers({
     'Content-Type': 'text/plain;charset=UTF-8',
     'X-Content-Type-Options': 'nosniff',
@@ -400,7 +415,7 @@ function buildPreviewUnauthorizedResponse(request, isAsset = false) {
   });
 }
 
-function resolveThemeUrlForAsset(request, settings) {
+function resolveThemeUrlForAsset(request: Request, settings: SiteSettings) {
   const url = new URL(request.url);
   const queryThemeUrl = getPreviewThemeUrlFromQuery(url);
   if (queryThemeUrl) {
@@ -418,7 +433,7 @@ function resolveThemeUrlForAsset(request, settings) {
   };
 }
 
-function shouldUseBuiltinFrontend(path) {
+function shouldUseBuiltinFrontend(path: string): boolean {
   return path === '/admin' || path.startsWith('/admin/');
 }
 

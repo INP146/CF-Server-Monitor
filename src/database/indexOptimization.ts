@@ -1,5 +1,7 @@
 import { saveSiteOptions, debug, getSettingByKey } from '../utils/settings.js';
 import { getAllServers, clearServersListCache } from '../utils/cache.js';
+import { errorMessage } from '../types/domain.js';
+import type { ServerRecord } from '../types/domain.js';
 
 export const HISTORY_PARTITION_MULTIPLIER = 10000000000000;
 export const HISTORY_AUTO_OPTIMIZED_MIN_ID = HISTORY_PARTITION_MULTIPLIER;
@@ -7,9 +9,9 @@ export const HISTORY_MAX_PARTITION_ID = 900;
 export const HISTORY_MAX_TIME_KEY = 991231235959;
 
 // 确保servers历史记录分区优化
-export async function ensureServerOptimization(db) {
+export async function ensureServerOptimization(db: D1Database) {
   const optimized = await getSettingByKey(db, 'servers_optimized', true);
-  const { results: columns = [] } = await db.prepare(`PRAGMA table_info(servers)`).all();
+  const { results: columns = [] } = await db.prepare(`PRAGMA table_info(servers)`).all<{ name: string }>();
   const existingColumns = new Set(columns.map(column => column.name));
   let addedColumns = 0;
 
@@ -34,11 +36,11 @@ export async function ensureServerOptimization(db) {
     return { success: true, assigned: 0 };
   }
 
-  const { results: servers = [] } = await db.prepare(`
+    const { results: servers = [] } = await db.prepare(`
     SELECT id, history_partition_id
     FROM servers
     ORDER BY id ASC
-  `).all();
+  `).all<{ id: string; history_partition_id: string | number | null }>();
   
   if (servers.length === 0) {
     debug('没有服务器需要优化');
@@ -65,7 +67,7 @@ export async function ensureServerOptimization(db) {
       ).bind(partitionId, server.id).run();
       updated++;
     } catch (e) {
-      debug(`Failed to update server ${server.id} history_partition_id: ${e.message}`);
+      debug(`Failed to update server ${server.id} history_partition_id: ${errorMessage(e)}`);
     }
   }
 
@@ -81,7 +83,7 @@ export async function ensureServerOptimization(db) {
 }
 
 // 获取下一个可用的历史记录分区ID
-export async function getNextServerHistoryPartitionId(db) {
+export async function getNextServerHistoryPartitionId(db: D1Database): Promise<number> {
   const servers = await getAllServers(db, true);
   const usedIds = new Set(
     servers
@@ -96,18 +98,18 @@ export async function getNextServerHistoryPartitionId(db) {
   throw new Error(`No available history partition id`);
 }
 
-function padHistoryTimePart(value) {
+function padHistoryTimePart(value: unknown): string {
   return String(value).padStart(2, '0');
 }
 
 // 格式化历史记录时间戳
-export function normalizeHistoryTimestamp(value, fallback = Date.now()) {
+export function normalizeHistoryTimestamp(value: unknown, fallback = Date.now()): number {
   const ts = Number(value);
   if (!Number.isFinite(ts) || ts <= 0) return fallback;
   return ts < 10000000000 ? ts * 1000 : ts;
 }
 
-export function formatHistoryTimeKey(timestamp) {
+export function formatHistoryTimeKey(timestamp: unknown): number {
   const normalized = normalizeHistoryTimestamp(timestamp);
 
   const date = new Date(normalized);
@@ -127,7 +129,7 @@ export function formatHistoryTimeKey(timestamp) {
   ].join(''));
 }
 
-export function normalizeHistoryPartitionId(value) {
+export function normalizeHistoryPartitionId(value: unknown): number | null {
   const partitionId = Number(value);
   if (!Number.isInteger(partitionId) || partitionId <= 0 || partitionId > HISTORY_MAX_PARTITION_ID) {
     return null;
@@ -135,7 +137,7 @@ export function normalizeHistoryPartitionId(value) {
   return partitionId;
 }
 
-export function buildHistoryId(partitionId, timestamp) {
+export function buildHistoryId(partitionId: unknown, timestamp: unknown): number {
   const normalizedPartitionId = normalizeHistoryPartitionId(partitionId);
   if (!normalizedPartitionId) {
     throw new Error('Invalid history partition id');
@@ -144,10 +146,10 @@ export function buildHistoryId(partitionId, timestamp) {
 }
 
 export async function getServerHistoryInfo(
-  db,
-  serverId,
-  server: { id?: unknown; history_partition_id?: unknown; timestamp?: unknown } | null = null
-) {
+  db: D1Database,
+  serverId: string,
+  server: ServerRecord | null = null
+): Promise<{ partitionId: number | null; startTimestamp: number }> {
   const target = server && server.id === serverId
     ? server
     : (await getAllServers(db, true)).find(s => s.id === serverId);
@@ -164,7 +166,7 @@ export async function getServerHistoryInfo(
 }
 
 export function getHistoryIdRange(
-  partitionId,
+  partitionId: unknown,
   startTimestamp: number | null = null,
   endTimestamp: number | null = null
 ) {

@@ -1,4 +1,4 @@
-function parseAllowedOrigins(corsAllowedOrigins) {
+function parseAllowedOrigins(corsAllowedOrigins?: string): string[] {
   if (!corsAllowedOrigins || corsAllowedOrigins.trim() === '') {
     return [];
   }
@@ -8,18 +8,18 @@ function parseAllowedOrigins(corsAllowedOrigins) {
     .filter(o => o !== '');
 }
 
-export function getCorsAllowedOrigins(env) {
+export function getCorsAllowedOrigins(env: Env): string[] {
   return parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 }
 
-export function isOriginAllowed(origin, allowedOrigins) {
+export function isOriginAllowed(origin: string | null, allowedOrigins: string[]): origin is string {
   if (!origin || allowedOrigins.length === 0) {
     return false;
   }
   return allowedOrigins.includes(origin);
 }
 
-export function createCorsHeaders(origin, allowedOrigins) {
+export function createCorsHeaders(origin: string | null, allowedOrigins: string[]): Headers {
   const headers = new Headers();
   
   if (isOriginAllowed(origin, allowedOrigins)) {
@@ -31,7 +31,7 @@ export function createCorsHeaders(origin, allowedOrigins) {
   return headers;
 }
 
-export function createOptionsResponse(request, allowedOrigins) {
+export function createOptionsResponse(request: Request, allowedOrigins: string[]): Response {
   const origin = request.headers.get('Origin');
   const headers = createCorsHeaders(origin, allowedOrigins);
   
@@ -54,7 +54,7 @@ export function createOptionsResponse(request, allowedOrigins) {
   });
 }
 
-export function applyCors(response, request, allowedOrigins) {
+export function applyCors(response: Response, request: Request, allowedOrigins: string[]): Response {
   const origin = request.headers.get('Origin');
   if (!isOriginAllowed(origin, allowedOrigins)) {
     return response;

@@ -86,7 +86,7 @@ const CYCLE_ALIASES = new Map([
 
 const NORMALIZED_CURRENCIES = new Set(CURRENCY_OPTIONS.map(item => item.symbol));
 
-export function normalizePrice(value) {
+export function normalizePrice(value: unknown): string {
   if (value === null || value === undefined) return '';
 
   const raw = String(value).trim();
@@ -104,7 +104,7 @@ export function normalizePrice(value) {
   return num.toFixed(2);
 }
 
-export function normalizeCurrency(value) {
+export function normalizeCurrency(value: unknown): string {
   const raw = String(value || '').trim();
   if (!raw) return '';
 
@@ -123,7 +123,7 @@ export function normalizeCurrency(value) {
   return NORMALIZED_CURRENCIES.has(symbol) ? symbol : '';
 }
 
-export function detectCurrencySymbol(value) {
+export function detectCurrencySymbol(value: unknown): string {
   const raw = String(value || '');
   if (!raw) return '';
   if (raw.includes('￥')) return '¥';
@@ -139,7 +139,7 @@ export function detectCurrencySymbol(value) {
   return CURRENCY_OPTIONS.find(item => item.symbol.length === 1 && raw.includes(item.symbol))?.symbol || '';
 }
 
-export function detectBillingCycle(value) {
+export function detectBillingCycle(value: unknown): string {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return '';
 
@@ -155,7 +155,7 @@ export function detectBillingCycle(value) {
   return '';
 }
 
-export function normalizeBillingCycle(value) {
+export function normalizeBillingCycle(value: unknown): string {
   const raw = String(value || '').trim();
   if (!raw) return 'month';
 
@@ -165,16 +165,16 @@ export function normalizeBillingCycle(value) {
   return CYCLE_ALIASES.get(raw.toLowerCase()) || 'month';
 }
 
-function getBillingCycleOption(value) {
+function getBillingCycleOption(value: unknown) {
   const normalized = normalizeBillingCycle(value);
   return BILLING_CYCLES.find(item => item.value === normalized) || BILLING_CYCLES[0];
 }
 
-function isEnabledFlag(value) {
+function isEnabledFlag(value: unknown): boolean {
   return value === true || value === 1 || value === '1' || value === 'true';
 }
 
-function parseDateOnly(value) {
+function parseDateOnly(value: unknown): { year: number; month: number; day: number } | null {
   const match = String(value || '').trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
 
@@ -194,11 +194,11 @@ function parseDateOnly(value) {
   return { year, month, day };
 }
 
-function daysInUtcMonth(year, month) {
+function daysInUtcMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-function toDateString(year, month, day) {
+function toDateString(year: number, month: number, day: number): string {
   return [
     String(year).padStart(4, '0'),
     String(month).padStart(2, '0'),
@@ -206,7 +206,7 @@ function toDateString(year, month, day) {
   ].join('-');
 }
 
-function addBillingCycleToDate(dateString, billingCycle) {
+function addBillingCycleToDate(dateString: unknown, billingCycle: unknown): string {
   const parsed = parseDateOnly(dateString);
   if (!parsed) return String(dateString || '').trim();
 
@@ -219,12 +219,18 @@ function addBillingCycleToDate(dateString, billingCycle) {
   return toDateString(year, month, day);
 }
 
-function utcDateStringWithOffset(now = Date.now(), offsetDays = 0) {
+function utcDateStringWithOffset(now = Date.now(), offsetDays = 0): string {
   const date = new Date(now + (Number(offsetDays) || 0) * 86400000);
   return toDateString(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
 }
 
-export function renewExpireDateIfNeeded(expireDate, billingCycle, autoRenewal, now = Date.now(), renewBeforeDays = 0) {
+export function renewExpireDateIfNeeded(
+  expireDate: unknown,
+  billingCycle: unknown,
+  autoRenewal: unknown,
+  now = Date.now(),
+  renewBeforeDays = 0
+): { expire_date: string; renewed: boolean } {
   const original = String(expireDate || '').trim();
   if (!original || !parseDateOnly(original) || !isEnabledFlag(autoRenewal)) {
     return { expire_date: original, renewed: false };

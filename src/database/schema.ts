@@ -3,10 +3,12 @@ import { saveSiteOptions, debug, getSettingByKey } from '../utils/settings.js';
 import { isDisabledProbeMetric, normalizeProbeMetricRow } from '../utils/metrics.js';
 import { ensureServerOptimization, buildHistoryId, getServerHistoryInfo, getHistoryIdRange } from './indexOptimization.js';
 import { addHistoryColumns, ensureHistoryIndex, isHistoryOptimized } from './updateDatabase.js';
+import { errorMessage } from '../types/domain.js';
+import type { DataRecord, MetricRecord, ServerRecord } from '../types/domain.js';
 
 let dbInitialized = false;
 
-export async function initDatabase(db) {
+export async function initDatabase(db: D1Database): Promise<void> {
   if (dbInitialized) return;
 
   debug('初始化数据库');
@@ -127,7 +129,7 @@ export async function initDatabase(db) {
   }
 }
 
-export async function clearHistory(db) {
+export async function clearHistory(db: D1Database) {
   debug('开始清空历史数据...');
   
   try {
@@ -156,12 +158,12 @@ export async function clearHistory(db) {
     return {
       success: false,
       message: 'databaseRebuiltFailed',
-      error: e.message
+      error: errorMessage(e)
     };
   }
 }
 
-async function hasHistoryServerTimeIndex(db, tableName) {
+async function hasHistoryServerTimeIndex(db: D1Database, tableName: string): Promise<boolean> {
   const index = await db.prepare(`
     SELECT name
     FROM sqlite_master
@@ -176,7 +178,7 @@ async function hasHistoryServerTimeIndex(db, tableName) {
   return !!index;
 }
 
-function buildHistorySourceQuery(tableName, useIdRange, columns) {
+function buildHistorySourceQuery(tableName: string, useIdRange: boolean, columns: string): string {
   if (useIdRange) {
     return `
       SELECT timestamp, ${columns} FROM ${tableName}
@@ -193,7 +195,13 @@ function buildHistorySourceQuery(tableName, useIdRange, columns) {
   `;
 }
 
-export async function getMetricsHistory(db, serverId, hours, columns, server = null) {
+export async function getMetricsHistory(
+  db: D1Database,
+  serverId: string,
+  hours: number,
+  columns: string,
+  server: ServerRecord | null = null
+): Promise<DataRecord[]> {
   const now = Date.now();
   const cacheDuration = getCacheDuration(hours);
   
@@ -234,7 +242,8 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     `SELECT name FROM sqlite_master WHERE type='table' AND name='metrics_history_old'`
   ).first();
 
-  const history_id_optimized = await getSettingByKey(db, 'history_id_optimized', true);
+  const historyIdOptimized = await getSettingByKey(db, 'history_id_optimized', true);
+  const history_id_optimized = historyIdOptimized === true;
   const currentHasServerTimeIndex = history_id_optimized
     ? false
     : await hasHistoryServerTimeIndex(db, 'metrics_history');
@@ -289,7 +298,7 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
     SELECT timestamp, ${columns}
     FROM sampled
     WHERE rn = 1
-  `).bind(...bindValues).all();
+  `).bind(...bindValues).all<DataRecord>();
 
   const result = rawResult.results.map(row => normalizeProbeMetricRow({
     ...row,
@@ -306,7 +315,9 @@ export async function getMetricsHistory(db, serverId, hours, columns, server = n
 }
 
 
-export async function weeklyCleanup(db) {
+export async function weeklyCleanup(db: D1Database): Promise<
+  { success: true; message: string } | { success: false; error: string }
+> {
   try {
     debug('[Cleanup] 开始执行表轮换操作...');
     
@@ -347,11 +358,19 @@ export async function weeklyCleanup(db) {
     };
   } catch (e) {
     console.error('[Cleanup] 表轮换失败:', e);
-    return { success: false, error: e.message };
+    return { success: false, error: errorMessage(e) };
   }
 }
 
-export async function saveMetricsHistory(db, serverId, historyPartitionId, metrics, regionCode = '', timestamp = null, agentVersion = '') {
+export async function saveMetricsHistory(
+  db: D1Database,
+  serverId: string,
+  historyPartitionId: unknown,
+  metrics: DataRecord,
+  regionCode = '',
+  timestamp: number | null = null,
+  agentVersion = ''
+): Promise<void> {
   const historyId = buildHistoryId(historyPartitionId, timestamp);
   const rawTimestamp = Number(timestamp);
   const now = Number.isFinite(rawTimestamp) && rawTimestamp > 0
@@ -360,20 +379,20 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
 
   const DISABLED_PROBE_VALUE = 'false';
 
-  const parsePing = (val) => {
+  const parsePing = (val: unknown): string | number | null => {
     if (isDisabledProbeMetric(val)) return DISABLED_PROBE_VALUE;
-    const num = parseInt(val);
+    const num = parseInt(String(val), 10);
     return (num > 0) ? num : null;
   };
 
-  const parseLoss = (val) => {
+  const parseLoss = (val: unknown): string | number | null => {
     if (isDisabledProbeMetric(val)) return DISABLED_PROBE_VALUE;
-    const num = parseInt(val);
+    const num = parseInt(String(val), 10);
     if (Number.isNaN(num)) return null;
     return Math.max(0, Math.min(100, num));
   };
 
-  const insertHistoryRow = async () => {
+  const insertHistoryRow = async (): Promise<void> => {
     await db.prepare(`
     INSERT INTO metrics_history (
       id, server_id, timestamp, agent_version, cpu, load_avg,
@@ -401,15 +420,15 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
     serverId,
     now,
     agentVersion || '',
-    parseFloat(metrics.cpu) || 0,
+    parseFloat(String(metrics.cpu ?? '')) || 0,
     metrics.load || metrics.load_avg || '0 0 0',
-    parseFloat(metrics.net_in_speed) || 0,
-    parseFloat(metrics.net_out_speed) || 0,
-    parseFloat(metrics.net_rx) || 0,
-    parseFloat(metrics.net_tx) || 0,
-    parseInt(metrics.processes) || 0,
-    parseInt(metrics.tcp_conn) || 0,
-    parseInt(metrics.udp_conn) || 0,
+    parseFloat(String(metrics.net_in_speed ?? '')) || 0,
+    parseFloat(String(metrics.net_out_speed ?? '')) || 0,
+    parseFloat(String(metrics.net_rx ?? '')) || 0,
+    parseFloat(String(metrics.net_tx ?? '')) || 0,
+    parseInt(String(metrics.processes ?? ''), 10) || 0,
+    parseInt(String(metrics.tcp_conn ?? ''), 10) || 0,
+    parseInt(String(metrics.udp_conn ?? ''), 10) || 0,
     parsePing(metrics.ping_ct),
     parsePing(metrics.ping_cu),
     parsePing(metrics.ping_cm),
@@ -418,13 +437,13 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
     parseLoss(metrics.loss_cu),
     parseLoss(metrics.loss_cm),
     parseLoss(metrics.loss_bd),
-    parseFloat(metrics.ram_total) || 0,
-    parseFloat(metrics.ram_used) || 0,
-    parseFloat(metrics.swap_total) || 0,
-    parseFloat(metrics.swap_used) || 0,
-    parseFloat(metrics.disk_total) || 0,
-    parseFloat(metrics.disk_used) || 0,
-    parseInt(metrics.cpu_cores) || 0,
+    parseFloat(String(metrics.ram_total ?? '')) || 0,
+    parseFloat(String(metrics.ram_used ?? '')) || 0,
+    parseFloat(String(metrics.swap_total ?? '')) || 0,
+    parseFloat(String(metrics.swap_used ?? '')) || 0,
+    parseFloat(String(metrics.disk_total ?? '')) || 0,
+    parseFloat(String(metrics.disk_used ?? '')) || 0,
+    parseInt(String(metrics.cpu_cores ?? ''), 10) || 0,
     metrics.cpu_info || '',
     Array.isArray(metrics.gpu_info) ? JSON.stringify(metrics.gpu_info) : (metrics.gpu_info || ''),
     metrics.arch || '',
@@ -434,15 +453,15 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
     metrics.ip_v4 || '0',
     metrics.ip_v6 || '0',
     metrics.boot_time || '',
-    parseFloat(metrics.net_rx_monthly) || 0,
-    parseFloat(metrics.net_tx_monthly) || 0
+    parseFloat(String(metrics.net_rx_monthly ?? '')) || 0,
+    parseFloat(String(metrics.net_tx_monthly ?? '')) || 0
     ).run();
   };
 
   try {
     await insertHistoryRow();
   } catch (e) {
-    if (e?.message && /has no column/i.test(e.message)) {
+    if (/has no column/i.test(errorMessage(e))) {
       console.warn('检测到数据库字段缺失，尝试添加缺失字段...');
       await addHistoryColumns(db);
       try {
@@ -457,10 +476,10 @@ export async function saveMetricsHistory(db, serverId, historyPartitionId, metri
 }
 
 export async function getLatestMetrics(
-  db,
-  serverId,
-  server: { id?: unknown; history_partition_id?: unknown; timestamp?: unknown } | null = null
-) {
+  db: D1Database,
+  serverId: string,
+  server: ServerRecord | null = null
+): Promise<MetricRecord | null> {
   try {
     const historyInfo = await getServerHistoryInfo(db, serverId, server);
     if (!historyInfo.partitionId) {
@@ -479,13 +498,13 @@ export async function getLatestMetrics(
         AND id <= ?
       ORDER BY id DESC
       LIMIT 1
-    `).bind(startId, endId).first()
+    `).bind(startId, endId).first<MetricRecord>()
     :await db.prepare(`
       SELECT * FROM metrics_history
       WHERE server_id = ?
       ORDER BY timestamp DESC
       LIMIT 1
-    `).bind(serverId).first();
+    `).bind(serverId).first<MetricRecord>();
     return result ? normalizeProbeMetricRow(result) : null;
   } catch (e) {
     console.error('获取最新指标数据失败:', e);
@@ -493,7 +512,7 @@ export async function getLatestMetrics(
   }
 }
 
-export async function getLatestMetricsForAllServers(db) {
+export async function getLatestMetricsForAllServers(db: D1Database): Promise<Map<string, MetricRecord>> {
   const now = Date.now();
   const cacheInfo = getLatestMetricsCache();
   if (cacheInfo.cache && now - cacheInfo.time < cacheInfo.ttl) {
@@ -508,11 +527,14 @@ export async function getLatestMetricsForAllServers(db) {
 
     const entries = await Promise.all(
       servers.map(s =>
-        getLatestMetrics(db, s.id, s).then(metrics => [s.id, metrics])
+        getLatestMetrics(db, s.id, s).then(metrics => [s.id, metrics] as const)
       )
     );
 
-    const result = new Map(entries.filter(([, m]) => m !== null));
+    const result = new Map<string, MetricRecord>();
+    for (const [serverId, metrics] of entries) {
+      if (metrics) result.set(serverId, metrics);
+    }
     setLatestMetricsCache(result);
     return result;
   } catch (e) {

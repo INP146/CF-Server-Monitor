@@ -2,20 +2,29 @@ import { getLatestMetricsForAllServers } from '../database/schema.js';
 import { clearServersListCache, getAllServers } from '../utils/cache.js';
 import { getTgNotifyMinutes, loadSiteSettings, debug } from '../utils/settings.js';
 import { detectBillingCycle, normalizeBillingCycle, renewExpireDateIfNeeded } from '../utils/serverBilling.js';
+import { errorMessage, isRecord } from '../types/domain.js';
+import type { DataRecord } from '../types/domain.js';
+
+interface NotificationSettings {
+  tg_bot_token: string;
+  tg_chat_id?: string;
+}
 
 const MAX_RETRIES = 3;
 const RETRY_DELAY = 1000;
 
-function formatLastReportTime(timestamp) {
+function formatLastReportTime(timestamp: unknown): string {
   if (!timestamp) return '无上报记录';
 
-  const date = new Date(timestamp);
+  const date = new Date(
+    typeof timestamp === 'string' || typeof timestamp === 'number' ? timestamp : NaN
+  );
   if (Number.isNaN(date.getTime())) return '无效时间';
 
   return date.toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' });
 }
 
-async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
+async function fetchWithRetry(url: string, options: RequestInit, retries = MAX_RETRIES): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     try {
       const response = await fetch(url, options);
@@ -36,7 +45,10 @@ async function fetchWithRetry(url, options, retries = MAX_RETRIES) {
 }
 
 
-export async function sendNotification(settings, msg) {
+export async function sendNotification(
+  settings: NotificationSettings,
+  msg: string
+): Promise<string | undefined> {
   if(!settings.tg_bot_token) return;
   const title = "💌 EdgeProbe";
   if(settings.tg_bot_token.indexOf("onebot:") == 0) {
@@ -67,7 +79,7 @@ export async function sendNotification(settings, msg) {
         body: JSON.stringify(body)
       });
     } catch (e) {
-      return "OneBot 通知发送失败: " + e.message;
+      return "OneBot 通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_bot_token.includes("open.feishu.cn")) {
     // 飞书机器人 Webhook
@@ -85,7 +97,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "飞书通知发送失败: " + e.message;
+      return "飞书通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_bot_token.includes("oapi.dingtalk.com") || settings.tg_bot_token.includes("api.dingtalk.com")) {
     // 钉钉机器人 Webhook
@@ -99,7 +111,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "钉钉通知发送失败: " + e.message;
+      return "钉钉通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_bot_token.includes("https://api.day.app/") || settings.tg_bot_token.indexOf("bark:") == 0) {
     let barkUrl = settings.tg_bot_token;
@@ -117,7 +129,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "Bark通知发送失败: " + e.message;
+      return "Bark通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_bot_token.includes("https://qyapi.weixin.qq.com")){
     try {
@@ -130,7 +142,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "企业微信通知发送失败: " + e.message;
+      return "企业微信通知发送失败: " + errorMessage(e);
     }
   // Server 酱（使用 sendkey）
   }else if(settings.tg_bot_token.includes("https://sctapi.ftqq.com/")) {
@@ -144,7 +156,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "Server酱通知发送失败: " + e.message;
+      return "Server酱通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_bot_token.includes("https://wxpusher.zjiecode.com/api/send/message/SPT_")) {
     const match = settings.tg_bot_token.match(/\/message\/([^/]+)/);
@@ -162,7 +174,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "WxPusher通知发送失败: " + e.message;
+      return "WxPusher通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_bot_token.includes("/message?token=")) {
     try {
@@ -179,7 +191,7 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "Gotify通知发送失败: " + e.message;
+      return "Gotify通知发送失败: " + errorMessage(e);
     }
   }else if(settings.tg_chat_id) {
     // Telegram Bot (最后 fallback，通过 chat_id 判断)
@@ -194,14 +206,14 @@ export async function sendNotification(settings, msg) {
         })
       });
     } catch (e) {
-      return "Telegram 通知发送失败: " + e.message;
+      return "Telegram 通知发送失败: " + errorMessage(e);
     }
   }else {
     return "未知的通知方式";
   }
 }
 
-export async function checkOfflineNodes(db) {
+export async function checkOfflineNodes(db: D1Database): Promise<void> {
   const siteSettings = await loadSiteSettings(db);
   const tgNotifyMinutes = getTgNotifyMinutes(siteSettings.tg_notify);
 
@@ -212,14 +224,17 @@ export async function checkOfflineNodes(db) {
     
     const latestMetricsMap = await getLatestMetricsForAllServers(db);
     
-    let alertState = {};
+    let alertState: DataRecord = {};
     const stateRes = await db.prepare(
       "SELECT value FROM settings WHERE key = 'alert_state'"
     ).first();
     
     if (stateRes) {
       try {
-        alertState = JSON.parse(stateRes.value);
+        const parsed: unknown = JSON.parse(String(stateRes.value));
+        if (isRecord(parsed)) {
+          alertState = parsed;
+        }
       } catch (e) {
         alertState = {};
       }
@@ -241,13 +256,13 @@ export async function checkOfflineNodes(db) {
         isOffline = diff > offlineThreshold;
       }
 
-      if (isOffline && !alertState[s.id]) {
+      if (isOffline && !Boolean(alertState[s.id])) {
         offlineNodes.push({
           name: s.name,
           lastReportTime: latestMetrics?.timestamp
         });
         alertState[s.id] = true;
-      } else if (!isOffline && alertState[s.id]) {
+      } else if (!isOffline && Boolean(alertState[s.id])) {
         recoveredNodes.push(s);
         delete alertState[s.id];
       }
@@ -277,7 +292,7 @@ export async function checkOfflineNodes(db) {
   }
 }
 
-export async function checkExpiringServers(db) {
+export async function checkExpiringServers(db: D1Database): Promise<void> {
   const siteSettings = await loadSiteSettings(db);
 
   try {

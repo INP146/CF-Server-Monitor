@@ -3,6 +3,8 @@
  * 统一存放各处重复定义的函数
  */
 
+import { isRecord } from '../types/domain.js';
+
 /**
  * 验证 Turnstile token
  * @param {string} token - Turnstile token
@@ -26,8 +28,8 @@ export async function verifyTurnstileToken(token: string | null, secretKey: stri
       })
     });
     
-    const data = await response.json<{ success?: boolean }>();
-    return data.success === true;
+    const data: unknown = await response.json();
+    return isRecord(data) && data.success === true;
   } catch (e) {
     console.error('Turnstile verification error:', e);
     return false;
@@ -48,7 +50,7 @@ function bytesToHex(bytes: Uint8Array): string {
     .join('');
 }
 
-function hexToBytes(hex: string): Uint8Array | null {
+function hexToBytes(hex: string): Uint8Array<ArrayBuffer> | null {
   if (!hex || hex.length % 2 !== 0 || !/^[a-f0-9]+$/i.test(hex)) {
     return null;
   }
@@ -60,7 +62,10 @@ function hexToBytes(hex: string): Uint8Array | null {
   return bytes;
 }
 
-function timingSafeEqualBytes(left: Uint8Array | null, right: Uint8Array | null): boolean {
+function timingSafeEqualBytes(
+  left: Uint8Array<ArrayBuffer> | null,
+  right: Uint8Array<ArrayBuffer> | null
+): boolean {
   if (!(left instanceof Uint8Array) || !(right instanceof Uint8Array)) {
     return false;
   }
@@ -80,7 +85,11 @@ function timingSafeEqualBytes(left: Uint8Array | null, right: Uint8Array | null)
   return diff === 0;
 }
 
-async function derivePbkdf2Hash(password, salt, iterations) {
+async function derivePbkdf2Hash(
+  password: string,
+  salt: Uint8Array<ArrayBuffer>,
+  iterations: number
+): Promise<Uint8Array<ArrayBuffer>> {
   const encoder = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -104,7 +113,7 @@ async function derivePbkdf2Hash(password, salt, iterations) {
   return new Uint8Array(bits);
 }
 
-function parsePbkdf2Hash(storedHash) {
+function parsePbkdf2Hash(storedHash: unknown) {
   if (typeof storedHash !== 'string') {
     return null;
   }
@@ -132,17 +141,17 @@ function parsePbkdf2Hash(storedHash) {
   return { iterations, salt, hash };
 }
 
-export function isLegacyMd5Hash(storedHash) {
+export function isLegacyMd5Hash(storedHash: unknown): storedHash is string {
   return typeof storedHash === 'string' && /^[a-f0-9]{32}$/i.test(storedHash.trim());
 }
 
-export async function hashPassword(password) {
+export async function hashPassword(password: string): Promise<string> {
   const salt = crypto.getRandomValues(new Uint8Array(PASSWORD_SALT_BYTES));
   const hash = await derivePbkdf2Hash(password, salt, PASSWORD_HASH_ITERATIONS);
   return `${PASSWORD_HASH_ALGORITHM}$${PASSWORD_HASH_ITERATIONS}$${bytesToHex(salt)}$${bytesToHex(hash)}`;
 }
 
-export async function verifyPasswordHash(password, storedHash) {
+export async function verifyPasswordHash(password: string, storedHash: unknown) {
   const parsed = parsePbkdf2Hash(storedHash);
   if (parsed) {
     const hash = await derivePbkdf2Hash(password, parsed.salt, parsed.iterations);
@@ -187,7 +196,7 @@ const MD5_CONSTANTS = Array.from({ length: 64 }, (_, i) =>
   Math.floor(Math.abs(Math.sin(i + 1)) * 0x100000000) >>> 0
 );
 
-export async function md5Hash(input) {
+export async function md5Hash(input: string): Promise<string> {
   const bytes = Array.from(new TextEncoder().encode(input));
   const originalBitLength = bytes.length * 8;
   bytes.push(0x80);
@@ -198,7 +207,7 @@ export async function md5Hash(input) {
   for (let i = 0; i < 4; i++) bytes.push((lowBits >>> (i * 8)) & 0xff);
   for (let i = 0; i < 4; i++) bytes.push((highBits >>> (i * 8)) & 0xff);
 
-  const rotateLeft = (value, amount) => ((value << amount) | (value >>> (32 - amount))) >>> 0;
+  const rotateLeft = (value: number, amount: number) => ((value << amount) | (value >>> (32 - amount))) >>> 0;
 
   let a0 = 0x67452301;
   let b0 = 0xefcdab89;

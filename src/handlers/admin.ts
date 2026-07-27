@@ -11,8 +11,10 @@ import { getNextServerHistoryPartitionId, HISTORY_MAX_PARTITION_ID } from '../da
 import { isValidTrafficCorrection, validateAgentConfigInput, validatePingNode } from '../utils/agentConfig.js';
 import { detectBillingCycle, detectCurrencySymbol, normalizeBillingCycle, normalizeCurrency, normalizePrice, renewExpireDateIfNeeded } from '../utils/serverBilling.js';
 import type { SiteSettings } from '../utils/settings.js';
+import { errorMessage, isRecord } from '../types/domain.js';
+import type { DataRecord, ServerRecord } from '../types/domain.js';
 
-type AdminPayload = Record<string, any>;
+type AdminPayload = DataRecord;
 
 type PingNodeResult =
   | { valid: true; values: Record<string, string> }
@@ -22,11 +24,11 @@ const PING_NODE_FIELDS = ['custom_ct', 'custom_cu', 'custom_cm', 'custom_bd'];
 const THEME_PREVIEW_AUTH_COOKIE = 'cfsm_theme_preview_auth';
 const THEME_PREVIEW_AUTH_TTL = 600;
 
-function normalizeBooleanFlag(value) {
+function normalizeBooleanFlag(value: unknown): string {
   return value === true || value === 1 || value === '1' || value === 'true' ? '1' : '0';
 }
 
-function normalizeServerRegion(value) {
+function normalizeServerRegion(value: unknown): string {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 16);
 }
 
@@ -47,15 +49,15 @@ function normalizeServerBillingData(data: AdminPayload = {}) {
   };
 }
 
-function isValidUUID(id) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+function isValidUUID(id: unknown): id is string {
+  return typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 }
 
-function isValidName(name) {
-  return name && typeof name === 'string' && name.trim().length > 0 && name.length <= 100;
+function isValidName(name: unknown): name is string {
+  return typeof name === 'string' && name.trim().length > 0 && name.length <= 100;
 }
 
-function sanitizeCspDomains(input) {
+function sanitizeCspDomains(input: unknown): string {
   if (!input || typeof input !== 'string') return '';
   return input
     .split(',')
@@ -66,7 +68,7 @@ function sanitizeCspDomains(input) {
     .join(',');
 }
 
-function normalizeCspOrigin(value) {
+function normalizeCspOrigin(value: unknown): string {
   const raw = String(value || '').trim();
   if (!raw || /[\s;"']/.test(raw)) return '';
   try {
@@ -81,48 +83,48 @@ function normalizeCspOrigin(value) {
 }
 
 function normalizePingNodeFields(source: AdminPayload, fields = PING_NODE_FIELDS): PingNodeResult {
-  const values = {};
+  const values: Record<string, string> = {};
   for (const field of fields) {
     if (source?.[field] === undefined) continue;
     const result = validatePingNode(source?.[field]);
     if (!result.valid) {
       return { valid: false, field };
     }
-    values[field] = result.value;
+    values[field] = result.value || '';
   }
   return { valid: true, values };
 }
 
-function hasAppearanceInput(settings) {
+function hasAppearanceInput(settings: DataRecord): boolean {
   if (settings.appearance_options !== undefined) return true;
   return APPEARANCE_FIELDS
     .filter(field => field !== 'theme_options')
     .some(field => settings[field] !== undefined);
 }
 
-function extractBearerToken(request) {
+function extractBearerToken(request: Request): string {
   const authHeader = request.headers.get('Authorization') || '';
   const parts = authHeader.trim().split(/\s+/);
   return parts[0] === 'Bearer' && parts[1] ? parts[1] : '';
 }
 
-function buildThemePreviewUrl(request, themeUrl) {
+function buildThemePreviewUrl(request: Request, themeUrl: string): string {
   const previewUrl = new URL('/', request.url);
   previewUrl.searchParams.set('theme_url', themeUrl);
   return previewUrl.toString();
 }
 
-function buildThemePreviewAuthCookie(request, token) {
+function buildThemePreviewAuthCookie(request: Request, token: string): string {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return `${THEME_PREVIEW_AUTH_COOKIE}=${encodeURIComponent(token)}; Max-Age=${THEME_PREVIEW_AUTH_TTL}; Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
-function buildClearThemePreviewAuthCookie(request) {
+function buildClearThemePreviewAuthCookie(request: Request): string {
   const secure = new URL(request.url).protocol === 'https:' ? '; Secure' : '';
   return `${THEME_PREVIEW_AUTH_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
-function normalizeThemeUrl(value) {
+function normalizeThemeUrl(value: unknown): string | null | undefined {
   if (value === undefined) return undefined;
   const raw = String(value || '').trim();
   if (!raw) return '';
@@ -152,7 +154,7 @@ function normalizeThemeUrl(value) {
   }
 }
 
-function getThemeRawIndexUrl(themeUrl) {
+function getThemeRawIndexUrl(themeUrl: string): string {
   const normalized = normalizeThemeUrl(themeUrl);
   if (!normalized) return '';
 
@@ -167,7 +169,7 @@ function getThemeRawIndexUrl(themeUrl) {
   return `https://raw.githubusercontent.com/${themePath}/index.html`;
 }
 
-async function validateThemeUrlAvailable(themeUrl) {
+async function validateThemeUrlAvailable(themeUrl: string): Promise<boolean> {
   if (!themeUrl) return true;
 
   const rawIndexUrl = getThemeRawIndexUrl(themeUrl);
@@ -184,7 +186,7 @@ async function validateThemeUrlAvailable(themeUrl) {
   }
 }
 
-async function deleteServer(db, id) {
+async function deleteServer(db: D1Database, id: string): Promise<void> {
   try {
     const stmt1 = db.prepare(`PRAGMA foreign_key_list(metrics_history)`);
     const result1 = await stmt1.all();
@@ -228,7 +230,18 @@ function getLast24HoursRange() {
   };
 }
 
-async function cloudflareGraphql(query, variables, token) {
+interface UsageRange {
+  start?: string;
+  end?: string;
+  startTime: string;
+  endTime: string;
+}
+
+async function cloudflareGraphql(
+  query: string,
+  variables: DataRecord,
+  token: string
+): Promise<DataRecord> {
   const response = await fetch('https://api.cloudflare.com/client/v4/graphql', {
     method: 'POST',
     headers: {
@@ -237,15 +250,21 @@ async function cloudflareGraphql(query, variables, token) {
     },
     body: JSON.stringify({ query, variables })
   });
-  const data = await response.json<AdminPayload>();
-  if (!response.ok || data.errors) {
-    const message = data.errors && data.errors.length > 0 ? data.errors.map(e => e.message).join('; ') : 'Cloudflare GraphQL request failed';
+  const payload: unknown = await response.json();
+  const result = isRecord(payload) ? payload : {};
+  const errors = Array.isArray(result.errors) ? result.errors : [];
+  if (!response.ok || errors.length > 0) {
+    const message = errors.length > 0
+      ? errors.map(error => isRecord(error) && typeof error.message === 'string'
+        ? error.message
+        : 'Unknown GraphQL error').join('; ')
+      : 'Cloudflare GraphQL request failed';
     throw new Error(message);
   }
-  return data.data;
+  return isRecord(result.data) ? result.data : {};
 }
 
-async function fetchCloudflareUsage(token, accountId, range) {
+async function fetchCloudflareUsage(token: string, accountId: string, range: UsageRange) {
   const query = `query CloudflareUsage($accountTag: string!, $start: Date, $end: Date, $startTime: string, $endTime: string) {
     viewer {
       accounts(filter: { accountTag: $accountTag }) {
@@ -272,20 +291,29 @@ async function fetchCloudflareUsage(token, accountId, range) {
     startTime: range.startTime,
     endTime: range.endTime
   }, token);
-  const account = data.viewer?.accounts?.[0] || {};
-  const groups = account.d1AnalyticsAdaptiveGroups || [];
-  const usage = groups.reduce((total, group) => {
-    total.rowsRead += Number(group.sum?.rowsRead || 0);
-    total.rowsWritten += Number(group.sum?.rowsWritten || 0);
+  const viewer = isRecord(data.viewer) ? data.viewer : {};
+  const accounts = Array.isArray(viewer.accounts) ? viewer.accounts : [];
+  const account = isRecord(accounts[0]) ? accounts[0] : {};
+  const groups = Array.isArray(account.d1AnalyticsAdaptiveGroups)
+    ? account.d1AnalyticsAdaptiveGroups.filter(isRecord)
+    : [];
+  const usage = groups.reduce<{ rowsRead: number; rowsWritten: number }>((total, group) => {
+    const sum = isRecord(group.sum) ? group.sum : {};
+    total.rowsRead += Number(sum.rowsRead || 0);
+    total.rowsWritten += Number(sum.rowsWritten || 0);
     return total;
   }, { rowsRead: 0, rowsWritten: 0 });
-  const workersRequests = (account.workersInvocationsAdaptive || []).reduce((total, group) => {
-    return total + Number(group.sum?.requests || 0);
+  const workerGroups = Array.isArray(account.workersInvocationsAdaptive)
+    ? account.workersInvocationsAdaptive.filter(isRecord)
+    : [];
+  const workersRequests = workerGroups.reduce((total, group) => {
+    const sum = isRecord(group.sum) ? group.sum : {};
+    return total + Number(sum.requests || 0);
   }, 0);
   return { rowsRead: usage.rowsRead, rowsWritten: usage.rowsWritten, workersRequests, databaseCount: groups.length };
 }
 
-async function getD1DailyUsage(token, accountId) {
+async function getD1DailyUsage(token: string, accountId: string) {
   if (!token) throw new Error('cloudflareTokenRequired');
   if (!accountId) throw new Error('cloudflareAccountIdRequired');
 
@@ -318,10 +346,13 @@ export async function handleAdminAPI(
   loadFullSettings: (() => Promise<SiteSettings>) | null = null
 ): Promise<Response> {
   try {
-    const data = await request.json<AdminPayload>();
+    const body: unknown = await request.json();
+    if (!isRecord(body)) return createBadRequestResponse('invalidRequestBody');
+    const data = body;
 
     if (data.action === 'login') {
-      const { username, password } = data;
+      const username = typeof data.username === 'string' ? data.username : '';
+      const password = typeof data.password === 'string' ? data.password : '';
       
       if (!username || !password) {
         return createBadRequestResponse('missingCredentials');
@@ -343,7 +374,7 @@ export async function handleAdminAPI(
       const authHeader = 'Basic ' + btoa(username + ':' + password);
       const mockRequest = {
         headers: {
-          get: (key) => key === 'Authorization' ? authHeader : null
+          get: (key: string) => key === 'Authorization' ? authHeader : null
         }
       };
 
@@ -445,7 +476,7 @@ export async function handleAdminAPI(
       
       const serversWithStatus = servers.map(server => {
         const latestMetrics = latestMetricsMap.get(server.id);
-        const item = { ...server, region_override: server.region || '' };
+        const item: ServerRecord = { ...server, region_override: server.region || '' };
         let isOnline = false;
         
         if (latestMetrics) {
@@ -470,9 +501,9 @@ export async function handleAdminAPI(
 
         if (isOnline) {
           stats.online++;
-          stats.total_cpu += parseFloat(item.cpu) || 0;
-          stats.total_net_in += parseFloat(item.net_in_speed) || 0;
-          stats.total_net_out += parseFloat(item.net_out_speed) || 0;
+          stats.total_cpu += parseFloat(String(item.cpu ?? '')) || 0;
+          stats.total_net_in += parseFloat(String(item.net_in_speed ?? '')) || 0;
+          stats.total_net_out += parseFloat(String(item.net_out_speed ?? '')) || 0;
         } else {
           stats.offline++;
         }
@@ -504,17 +535,18 @@ export async function handleAdminAPI(
           message: 'd1UsageQueried'
         });
       } catch (e) {
-        return createBadRequestResponse(e.message);
+        return createBadRequestResponse(errorMessage(e));
       }
     }
     else if (data.action === 'send_test_notification') {
-      const { tg_bot_token, tg_chat_id } = data;
-      if (!tg_bot_token || tg_bot_token.trim().length === 0) {
+      const tgBotToken = typeof data.tg_bot_token === 'string' ? data.tg_bot_token : '';
+      const tgChatId = typeof data.tg_chat_id === 'string' ? data.tg_chat_id : '';
+      if (!tgBotToken.trim()) {
         return createBadRequestResponse('tgBotTokenRequired');
       }
       try {
         const testMsg = `✅ **测试通知**\n\n这是一条来自 EdgeProbe 的测试消息。\n\n**时间:** ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}`;
-        const result = await sendNotification({ tg_bot_token, tg_chat_id: tg_chat_id || '' }, testMsg);
+        const result = await sendNotification({ tg_bot_token: tgBotToken, tg_chat_id: tgChatId }, testMsg);
         if(result) {
           console.warn('Test notification failed:', result);
           return createBadRequestResponse('testNotificationFailed');
@@ -525,7 +557,7 @@ export async function handleAdminAPI(
       }
     }
     else if (data.action === 'save_settings') {
-      const settings = data.settings || {};
+      const settings = isRecord(data.settings) ? data.settings : {};
       const normalizedThemeUrl = normalizeThemeUrl(settings.theme_url);
       if (normalizedThemeUrl === null) {
         return createBadRequestResponse('invalidThemeUrl');
@@ -536,10 +568,10 @@ export async function handleAdminAPI(
 
       // 如果 turnstile_enabled 或 turnstile_login_enabled 开启，验证 turnstile_site_key 和 turnstile_secret_key 都不为空
       if (settings.turnstile_enabled === 'true' || settings.turnstile_enabled === true || settings.turnstile_login_enabled === 'true' || settings.turnstile_login_enabled === true) {
-        if (!settings.turnstile_site_key || settings.turnstile_site_key.trim().length === 0) {
+        if (typeof settings.turnstile_site_key !== 'string' || settings.turnstile_site_key.trim().length === 0) {
           return createBadRequestResponse('turnstileSiteKeyRequired');
         }
-        if (!settings.turnstile_secret_key || settings.turnstile_secret_key.trim().length === 0) {
+        if (typeof settings.turnstile_secret_key !== 'string' || settings.turnstile_secret_key.trim().length === 0) {
           return createBadRequestResponse('turnstileSecretKeyRequired');
         }
       }
@@ -547,7 +579,7 @@ export async function handleAdminAPI(
       // 如果 tg_notify 或 expire_reminder 开启，验证 tg_bot_token 不为空
       const tgNotify = normalizeTgNotify(settings.tg_notify);
       if (tgNotify !== '0' || settings.expire_reminder === 'true') {
-        if (!settings.tg_bot_token || settings.tg_bot_token.trim().length === 0) {
+        if (typeof settings.tg_bot_token !== 'string' || settings.tg_bot_token.trim().length === 0) {
           return createBadRequestResponse('tgBotTokenRequired');
         }
       }
@@ -569,7 +601,9 @@ export async function handleAdminAPI(
       const appearanceOptions: AdminPayload = {};
 
       if (shouldSaveAppearanceOptions) {
-        const nestedAppearanceOptions = settings.appearance_options || {};
+        const nestedAppearanceOptions = isRecord(settings.appearance_options)
+          ? settings.appearance_options
+          : {};
         for (const field of APPEARANCE_FIELDS) {
           const value = field === 'theme_options' ? nestedAppearanceOptions.theme_options : settings[field];
           if (value !== undefined) {
@@ -598,7 +632,7 @@ export async function handleAdminAPI(
       for (const field of SITE_FIELDS) {
         if (settings[field] !== undefined) {
           if (field === 'password') {
-            if (settings[field] && settings[field].length > 0) {
+            if (typeof settings[field] === 'string' && settings[field].length > 0) {
               siteOptions[field] = await hashPassword(settings[field]);
             }
           } else if (PING_NODE_FIELDS.includes(field)) {
@@ -712,7 +746,7 @@ export async function handleAdminAPI(
         .join(',');
       const safeNote = String(note || '').trim().slice(0, 500);
 
-      const toNullCorrection = (v) => {
+      const toNullCorrection = (v: unknown): number | null | undefined => {
         if (v === null || v === undefined || v === '') return null;
         return isValidTrafficCorrection(v) ? Number(v) : undefined;
       };
@@ -763,12 +797,12 @@ export async function handleAdminAPI(
           id
         ).run();
       } catch (e) {
-        if (e.message && /no such column/i.test(e.message)) {
+        if (/no such column/i.test(errorMessage(e))) {
           console.warn('检测到数据库字段缺失，尝试添加缺失字段...');
           await addServerColumns(env.DB);
           return createBadRequestResponse('dbColumnsAdded');
         }else{
-          const errMsg = e?.message || String(e);
+          const errMsg = errorMessage(e);
           return createBadRequestResponse(errMsg || 'serverUpdateFailed');
         }
       }
@@ -806,7 +840,7 @@ export async function handleAdminAPI(
     
     else if (data.action === 'export_servers') {
       try {
-        const servers = await env.DB.prepare('SELECT * FROM servers ORDER BY sort_order ASC').all();
+        const servers = await env.DB.prepare('SELECT * FROM servers ORDER BY sort_order ASC').all<ServerRecord>();
         return createSuccessResponse({
           success: true,
           servers: servers.results || [],
@@ -822,10 +856,12 @@ export async function handleAdminAPI(
         return createBadRequestResponse('noServersToImport');
       }
 
-      const existingServers = await env.DB.prepare('SELECT id FROM servers').all();
+      const existingServers = await env.DB.prepare('SELECT id FROM servers').all<{ id: string }>();
       const existingIds = new Set((existingServers.results || []).map(s => s.id));
 
-      const existingPartitionIds = await env.DB.prepare('SELECT history_partition_id FROM servers').all();
+      const existingPartitionIds = await env.DB.prepare(
+        'SELECT history_partition_id FROM servers'
+      ).all<{ history_partition_id: number | string | null }>();
       const usedPartitionIds = new Set(
         (existingPartitionIds.results || [])
           .map(s => Number(s.history_partition_id))
@@ -836,10 +872,16 @@ export async function handleAdminAPI(
       let skipped = 0;
       const skippedIds: string[] = [];
 
-      for (const server of importData) {
+      for (const serverValue of importData) {
+        if (!isRecord(serverValue)) {
+          skipped++;
+          skippedIds.push('(invalid)');
+          continue;
+        }
+        const server = serverValue;
         if (!server.id || !isValidUUID(server.id)) {
           skipped++;
-          skippedIds.push(server.id || '(invalid)');
+          skippedIds.push(typeof server.id === 'string' ? server.id : '(invalid)');
           continue;
         }
 

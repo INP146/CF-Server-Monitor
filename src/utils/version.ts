@@ -1,3 +1,5 @@
+import { isRecord } from '../types/domain.js';
+
 const REMOTE_VERSION_URL = 'https://raw.githubusercontent.com/INP146/EdgeProbe/refs/heads/main/version.json';
 const REMOTE_VERSION_TTL = 5 * 60 * 1000;
 const REMOTE_VERSION_FAILURE_TTL = 30 * 1000;
@@ -31,7 +33,7 @@ export async function getRemoteVersion() {
   return remoteVersionPromise;
 }
 
-async function fetchRemoteVersion(now) {
+async function fetchRemoteVersion(now: number): Promise<RemoteVersion | null> {
   try {
     const response = await fetch(REMOTE_VERSION_URL, {
       headers: { Accept: 'application/json' }
@@ -41,7 +43,8 @@ async function fetchRemoteVersion(now) {
       return cachedRemoteVersion;
     }
 
-    const data = await response.json<{ workers?: unknown; agent?: unknown }>();
+    const payload: unknown = await response.json();
+    const data = isRecord(payload) ? payload : {};
     cachedRemoteVersion = {
       workers: typeof data.workers === 'string' ? data.workers : '',
       agent: typeof data.agent === 'string' ? data.agent : ''
