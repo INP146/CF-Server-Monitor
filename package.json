@@ -14,6 +14,7 @@
     "build:frontend": "node scripts/build.js",
     "build:frontend-next": "npm run typecheck:frontend-next && vite build --config vite.config.next.ts",
     "typecheck:frontend-next": "vue-tsc --noEmit --project tsconfig.frontend-next.json",
+    "test:frontend-next": "tsx --tsconfig tsconfig.frontend-next.json --test test/frontend-next-logic.test.ts",
     "build:github-page": "tsx scripts/build-github-page.js",
     "test:agent-config": "tsx test/agent-config.js",
     "preview": "vite preview"
