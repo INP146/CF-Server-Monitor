@@ -26,9 +26,9 @@
             <div class="toolbar-controls">
               <a-input v-model:value="query" allow-clear placeholder="搜索名称、地址、系统或标签" class="search-input"><template #prefix><SearchOutlined /></template></a-input>
               <a-radio-group v-model:value="view" button-style="solid" class="view-switcher" aria-label="展示模式">
-                <a-tooltip title="卡片视图"><a-radio-button value="bar"><AppstoreOutlined /></a-radio-button></a-tooltip>
-                <a-tooltip title="环形视图"><a-radio-button value="ring"><PieChartOutlined /></a-radio-button></a-tooltip>
-                <a-tooltip title="表格视图"><a-radio-button value="table"><UnorderedListOutlined /></a-radio-button></a-tooltip>
+                <a-radio-button value="bar"><a-tooltip title="卡片视图"><AppstoreOutlined /></a-tooltip></a-radio-button>
+                <a-radio-button value="ring"><a-tooltip title="环形视图"><PieChartOutlined /></a-tooltip></a-radio-button>
+                <a-radio-button value="table"><a-tooltip title="表格视图"><UnorderedListOutlined /></a-tooltip></a-radio-button>
               </a-radio-group>
             </div>
           </div>

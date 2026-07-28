@@ -275,6 +275,15 @@ a.ant-btn:active {
   flex: 0 0 auto;
 }
 
+.view-switcher .ant-radio-button-wrapper-checked:not(.ant-radio-button-wrapper-disabled):focus-within {
+  box-shadow: none;
+}
+
+.view-switcher .ant-radio-button-wrapper:has(.ant-radio-button-input:focus-visible) {
+  outline: 2px solid var(--cf-orange);
+  outline-offset: 2px;
+}
+
 .filter-group::-webkit-scrollbar {
   display: none;
 }
