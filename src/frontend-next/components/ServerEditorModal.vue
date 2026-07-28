@@ -9,10 +9,8 @@
             <a-form-item label="区域代码"><a-input v-model:value="form.region" placeholder="US" /></a-form-item>
           </div>
           <a-form-item label="标签"><a-select v-model:value="form.tags" mode="tags" placeholder="输入后回车" :options="tagOptions" /></a-form-item>
-          <a-form-item label="IP 地址"><a-input v-model:value="form.ip" placeholder="由 Agent 自动上报" /></a-form-item>
           <a-form-item label="备注"><a-textarea v-model:value="form.note" :rows="3" placeholder="可选，后台双击可快速复制" /></a-form-item>
           <div class="modal-switch-grid">
-            <label><span>启用节点</span><a-switch v-model:checked="form.enabled" /></label>
             <label><span>从公开页面隐藏</span><a-switch v-model:checked="form.isHidden" /></label>
             <label><span>禁用离线通知</span><a-switch v-model:checked="form.offlineNotifyDisabled" /></label>
           </div>
@@ -36,8 +34,8 @@
             <a-form-item label="重置日"><a-input-number v-model:value="form.resetDay" :min="0" :max="31" addon-after="日" /></a-form-item>
           </div>
           <div class="modal-form-grid">
-            <a-form-item label="下行修正"><a-input-number v-model:value="form.rxCorrection" :min="0" :precision="1" addon-after="GB" /></a-form-item>
-            <a-form-item label="上行修正"><a-input-number v-model:value="form.txCorrection" :min="0" :precision="1" addon-after="GB" /></a-form-item>
+            <a-form-item label="下行修正"><a-input-number :value="form.rxCorrection ?? undefined" :min="0" :precision="1" addon-after="GB" @update:value="form.rxCorrection = normalizeCorrectionInput($event)" /></a-form-item>
+            <a-form-item label="上行修正"><a-input-number :value="form.txCorrection ?? undefined" :min="0" :precision="1" addon-after="GB" @update:value="form.txCorrection = normalizeCorrectionInput($event)" /></a-form-item>
           </div>
         </a-form>
       </a-tab-pane>
@@ -73,17 +71,58 @@ import ASwitch from 'ant-design-vue/es/switch'
 import ATabs, { TabPane as ATabPane } from 'ant-design-vue/es/tabs'
 
 import type { ManagedServer } from '../data/admin'
-import { dashboardServers } from '../data/dashboard'
 import { BILLING_CYCLES, CURRENCY_OPTIONS } from '../utils/server'
 import { validatePingNode } from '../utils/ping-node'
 
 const open = defineModel<boolean>('open', { required: true })
-const props = defineProps<{ server: ManagedServer | null }>()
+const props = defineProps<{
+  server: ManagedServer | null
+  pingDefaults?: Pick<ManagedServer, 'customCt' | 'customCu' | 'customCm' | 'customBd'>
+}>()
 const emit = defineEmits<{ save: [server: ManagedServer] }>()
 const activeTab = ref('basic')
 
 const emptyServer = (): ManagedServer => ({
-  ...dashboardServers[0]!, id: `server-${Date.now()}`, name: '', group: 'Default', tags: [], region: 'us', ip: '', location: 'New location', status: 'offline', cpu: 0, memory: 0, disk: 0, download: '0 B/s', upload: '0 B/s', latency: null, uptime: '-', load: '- / - / -', enabled: true, agentVersion: '等待安装', note: '', price: 0, currency: '$', billingCycle: 'month', expireDate: '', autoRenewal: false, trafficLimit: 0, trafficCalcType: 'total', resetDay: 1, collectInterval: 0, reportInterval: 60, customCt: '', customCu: '', customCm: '', customBd: '', rxCorrection: 0, txCorrection: 0, autoUpdate: false, isHidden: false, offlineNotifyDisabled: false,
+  id: `draft-${Date.now()}`,
+  name: '',
+  group: 'Default',
+  tags: [],
+  region: 'us',
+  ip: '',
+  location: '',
+  os: '',
+  arch: '',
+  status: 'offline',
+  cpu: 0,
+  memory: 0,
+  disk: 0,
+  download: '0 B/s',
+  upload: '0 B/s',
+  latency: null,
+  uptime: '-',
+  load: '- / - / -',
+  enabled: true,
+  agentVersion: '等待安装',
+  note: '',
+  price: 0,
+  currency: '$',
+  billingCycle: 'month',
+  expireDate: '',
+  autoRenewal: false,
+  trafficLimit: 0,
+  trafficCalcType: 'total',
+  resetDay: 1,
+  collectInterval: 0,
+  reportInterval: 60,
+  customCt: '',
+  customCu: '',
+  customCm: '',
+  customBd: '',
+  rxCorrection: null,
+  txCorrection: null,
+  autoUpdate: false,
+  isHidden: false,
+  offlineNotifyDisabled: false,
 })
 
 const form = reactive<ManagedServer>(emptyServer())
@@ -94,7 +133,7 @@ function cloneServer(server: ManagedServer): ManagedServer {
 
 watch(() => [open.value, props.server] as const, ([isOpen, server]) => {
   if (!isOpen) return
-  Object.assign(form, emptyServer(), server ? cloneServer(server) : {})
+  Object.assign(form, emptyServer(), server ? cloneServer(server) : props.pingDefaults || {})
   activeTab.value = 'basic'
 }, { immediate: true })
 
@@ -118,6 +157,12 @@ function pingError(key: typeof pingNodes[number]['key']) {
   return value && !validatePingNode(value).valid ? '请输入有效的域名、IP 或 host:port' : ''
 }
 const hasPingErrors = computed(() => pingNodes.some((node) => Boolean(pingError(node.key))))
+
+function normalizeCorrectionInput(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 function submit() {
   if (!form.name.trim() || hasPingErrors.value) return

@@ -24,6 +24,8 @@ export interface RequestOptions {
   includeTurnstileToken?: boolean
   includeTurnstileVerified?: boolean
   autoRedirect?: boolean
+  notifyAuthExpired?: boolean
+  notifyTurnstileExpired?: boolean
   baseUrl?: string
 }
 
@@ -45,14 +47,15 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-function createHeaders(options: RequestOptions): Headers {
+function createHeaders(options: RequestOptions, hasJsonBody = false): Headers {
   const {
     includeAuth = true,
     includeTurnstile = true,
     includeTurnstileToken = includeTurnstile,
     includeTurnstileVerified = true,
   } = options
-  const headers = new Headers({ 'Content-Type': 'application/json' })
+  const headers = new Headers()
+  if (hasJsonBody) headers.set('Content-Type', 'application/json')
 
   if (includeAuth) {
     const token = getAuthTokenForBase(options.baseUrl || getApiBases()[0]!)
@@ -78,19 +81,23 @@ function dispatchSessionEvent(name: string, baseUrl: string): void {
 
 async function handleResponse<T>(response: Response, options: RequestOptions): Promise<Omit<ApiResult<T>, 'baseUrl'>> {
   const { autoRedirect = true } = options
+  const notifyAuthExpired = options.notifyAuthExpired ?? autoRedirect
+  const notifyTurnstileExpired = options.notifyTurnstileExpired ?? autoRedirect
   const baseUrl = options.baseUrl || getApiBases()[0]!
 
   if (response.status === 401) {
+    const detail = await readErrorResponse(response, DEFAULT_ERROR_MESSAGES[401]!)
     clearAuthTokenForBase(baseUrl)
-    if (autoRedirect) dispatchSessionEvent(AUTH_EXPIRED_EVENT, baseUrl)
-    return { error: DEFAULT_ERROR_MESSAGES[401], status: response.status }
+    if (notifyAuthExpired) dispatchSessionEvent(AUTH_EXPIRED_EVENT, baseUrl)
+    return { ...detail, status: response.status }
   }
 
   if (response.status === 403) {
+    const detail = await readErrorResponse(response, DEFAULT_ERROR_MESSAGES[403]!)
     localStorage.removeItem(STORAGE.TURNSTILE_TOKEN)
     clearTurnstileVerificationForBase(baseUrl)
-    if (autoRedirect) dispatchSessionEvent(TURNSTILE_EXPIRED_EVENT, baseUrl)
-    return { error: DEFAULT_ERROR_MESSAGES[403], status: response.status }
+    if (notifyTurnstileExpired) dispatchSessionEvent(TURNSTILE_EXPIRED_EVENT, baseUrl)
+    return { ...detail, status: response.status }
   }
 
   if (!response.ok) {
@@ -126,13 +133,28 @@ async function handleResponse<T>(response: Response, options: RequestOptions): P
   }
 }
 
+async function readErrorResponse(response: Response, fallback: string): Promise<Pick<ApiResult<never>, 'error' | 'code' | 'message'>> {
+  let error = fallback
+  let code: string | number = response.status
+  let message: string | undefined
+  try {
+    const body = asRecord(await response.json())
+    if (typeof body?.message === 'string') message = body.message
+    if (typeof body?.error === 'string') error = body.error
+    if (typeof body?.code === 'string' || typeof body?.code === 'number') code = body.code
+  } catch {
+    // Error responses are not guaranteed to contain JSON.
+  }
+  return { error, code, message }
+}
+
 async function request<T>(method: string, url: string, body: unknown, options: RequestOptions = {}): Promise<ApiResult<T>> {
   const baseUrl = options.baseUrl || getApiBases()[0]!
   const resolvedOptions = { ...options, baseUrl }
   try {
     const response = await fetch(`${baseUrl}${url}`, {
       method,
-      headers: createHeaders(resolvedOptions),
+      headers: createHeaders(resolvedOptions, body !== undefined),
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: 'include',
     })

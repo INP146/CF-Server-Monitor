@@ -1,6 +1,6 @@
 <template>
   <div class="admin-page" :class="{ 'is-dark': isDark }">
-    <AppHeader subtitle="ADMIN CONSOLE" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
+    <AppHeader :title="settings.siteTitle || 'EdgeProbe'" subtitle="ADMIN CONSOLE" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
       <a-select v-if="apiEndpoints.length > 1" v-model:value="apiEndpoint" class="header-site-select" aria-label="管理站点"><a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option></a-select>
       <a-button type="text" href="#/"><template #icon><HomeOutlined /></template>监控页</a-button>
       <template #end><a-button type="text" danger @click="logout"><template #icon><LogoutOutlined /></template>退出</a-button></template>
@@ -19,7 +19,9 @@
         upload-total="实时合计"
       />
 
-      <a-alert v-if="feedback" :type="feedback.type" show-icon closable :message="feedback.message" class="admin-feedback" @close="feedback = null" />
+      <a-alert v-if="feedback" :type="feedback.type" show-icon closable :message="feedback.message" class="admin-feedback" @close="feedback = null">
+        <template v-if="settingsApiIndex === null" #action><a-button size="small" :loading="refreshing" @click="loadAdmin">重试</a-button></template>
+      </a-alert>
 
       <a-tabs v-model:active-key="activeTab" class="admin-tabs">
         <a-tab-pane key="servers" tab="服务器">
@@ -29,9 +31,9 @@
               <a-select v-model:value="statusFilter" class="status-select"><a-select-option value="all">全部状态</a-select-option><a-select-option value="online">在线</a-select-option><a-select-option value="offline">离线</a-select-option><a-select-option value="hidden">已隐藏</a-select-option></a-select>
             </div>
             <div class="admin-toolbar-actions">
-              <a-button v-if="selectedIds.length" danger @click="batchDelete"><template #icon><DeleteOutlined /></template>删除 {{ selectedIds.length }} 项</a-button>
+              <a-popconfirm v-if="selectedIds.length" :title="`确定删除选中的 ${selectedIds.length} 台服务器？`" ok-text="删除" cancel-text="取消" @confirm="batchDelete"><a-button danger><template #icon><DeleteOutlined /></template>删除 {{ selectedIds.length }} 项</a-button></a-popconfirm>
               <a-button :loading="refreshing" @click="refreshServers"><template #icon><ReloadOutlined /></template>刷新</a-button>
-              <a-button type="primary" @click="openCreateModal"><template #icon><PlusOutlined /></template>添加服务器</a-button>
+              <a-button type="primary" :disabled="settingsApiIndex !== apiIndex" @click="openCreateModal"><template #icon><PlusOutlined /></template>添加服务器</a-button>
             </div>
           </div>
 
@@ -48,7 +50,7 @@
               <template v-else-if="column.key === 'version'"><span>{{ record.agentVersion }}</span></template>
               <template v-else-if="column.key === 'status'"><a-badge :status="record.status === 'online' ? 'success' : 'error'" :text="record.status === 'online' ? '在线' : '离线'" /></template>
               <template v-else-if="column.key === 'enabled'"><a-switch :checked="record.enabled" size="small" @change="toggleServerEnabled(record, Boolean($event))" /></template>
-              <template v-else-if="column.key === 'actions'"><div class="table-actions"><a-tooltip title="安装命令"><a-button type="text" shape="circle" aria-label="安装命令" @click="openCommandModal(record)"><template #icon><CodeOutlined /></template></a-button></a-tooltip><a-tooltip title="编辑"><a-button type="text" shape="circle" aria-label="编辑" @click="openEditModal(record)"><template #icon><EditOutlined /></template></a-button></a-tooltip><a-tooltip title="删除"><a-button type="text" shape="circle" danger aria-label="删除" @click="openDeleteModal(record)"><template #icon><DeleteOutlined /></template></a-button></a-tooltip></div></template>
+              <template v-else-if="column.key === 'actions'"><div class="table-actions"><a-tooltip title="安装命令"><a-button type="text" shape="circle" aria-label="安装命令" :disabled="settingsApiIndex !== apiIndex" @click="openCommandModal(record)"><template #icon><CodeOutlined /></template></a-button></a-tooltip><a-tooltip title="编辑"><a-button type="text" shape="circle" aria-label="编辑" @click="openEditModal(record)"><template #icon><EditOutlined /></template></a-button></a-tooltip><a-tooltip title="删除"><a-button type="text" shape="circle" danger aria-label="删除" @click="openDeleteModal(record)"><template #icon><DeleteOutlined /></template></a-button></a-tooltip></div></template>
             </template>
           </a-table>
         </a-tab-pane>
@@ -68,14 +70,14 @@
                       <a-select-option value="table">表格</a-select-option>
                     </a-select>
                   </a-form-item>
-                  <a-form-item label="默认语言">
-                    <a-select v-model:value="settings.language">
-                      <a-select-option value="zh">简体中文</a-select-option>
-                      <a-select-option value="en">English</a-select-option>
-                    </a-select>
-                  </a-form-item>
                   <a-form-item label="背景图片" class="settings-field-wide">
                     <a-input v-model:value="settings.backgroundImage" placeholder="https://..." addon-after="URL" />
+                  </a-form-item>
+                  <a-form-item label="自定义 Head" class="settings-field-wide">
+                    <a-textarea v-model:value="settings.customHead" :rows="3" />
+                  </a-form-item>
+                  <a-form-item label="自定义脚本" class="settings-field-wide">
+                    <a-textarea v-model:value="settings.customScript" :rows="4" />
                   </a-form-item>
                 </div>
                 <div class="settings-toggle-grid">
@@ -110,7 +112,7 @@
                   </a-select>
                 </a-form-item>
                 <div class="settings-card-action">
-                  <a-button :loading="testingNotification" @click="testNotification"><template #icon><SendOutlined /></template>发送测试通知</a-button>
+                  <a-button :loading="testingNotification" :disabled="settingsApiIndex !== apiIndex" @click="testNotification"><template #icon><SendOutlined /></template>发送测试通知</a-button>
                 </div>
               </a-form>
             </a-card>
@@ -141,12 +143,12 @@
                 <a-form-item label="Cloudflare Account ID"><a-input v-model:value="settings.cloudflareAccountId" /></a-form-item>
                 <a-form-item label="Cloudflare API Token"><a-input-password v-model:value="settings.cloudflareApiToken" /></a-form-item>
                 <div class="settings-card-action">
-                  <a-button :loading="queryingQuota" @click="queryQuota"><template #icon><LineChartOutlined /></template>查询 D1 与 Workers 配额</a-button>
+                  <a-button :loading="queryingQuota" :disabled="settingsApiIndex !== apiIndex" @click="queryQuota"><template #icon><LineChartOutlined /></template>查询 D1 与 Workers 配额</a-button>
                 </div>
               </a-form>
             </a-card>
           </div>
-          <div class="settings-save-row"><span v-if="settingsSaved" class="save-status"><CheckCircleOutlined /> 已保存</span><a-button type="primary" :loading="savingSettings" :disabled="Boolean(passwordError)" @click="saveSettings"><template #icon><SaveOutlined /></template>保存设置</a-button></div>
+          <div class="settings-save-row"><span v-if="settingsSaved" class="save-status"><CheckCircleOutlined /> 已保存</span><a-button type="primary" :loading="savingSettings" :disabled="Boolean(passwordError) || settingsApiIndex !== apiIndex" @click="saveSettings"><template #icon><SaveOutlined /></template>保存设置</a-button></div>
         </a-tab-pane>
 
         <a-tab-pane key="database" tab="数据库">
@@ -161,9 +163,9 @@
       </a-tabs>
     </main>
 
-    <ServerEditorModal v-model:open="serverModalOpen" :server="editingServer" @save="saveServer" />
+    <ServerEditorModal v-model:open="serverModalOpen" :server="editingServer" :ping-defaults="pingDefaults" @save="saveServer" />
     <CommandPreviewModal v-model:open="commandModalOpen" :server="commandServer" :api-base="apiEndpoint" :api-secret="apiSecret" @edit="editFromCommand" />
-    <ServerDeleteModal v-model:open="deleteModalOpen" :server="deletingServer" @confirm="removeServer" />
+    <ServerDeleteModal v-model:open="deleteModalOpen" :server="deletingServer" :api-base="apiEndpoint" @confirm="removeServer" />
 
     <a-modal v-model:open="quotaModalOpen" title="D1 与 Workers 配额" :footer="null">
       <div class="quota-list"><div v-for="item in quotaItems" :key="item.label"><span><strong>{{ item.label }}</strong><small>{{ item.used }} / {{ item.limit }}</small></span><a-progress :percent="item.percent" :status="item.percent > 80 ? 'exception' : 'normal'" /></div></div>
@@ -180,7 +182,7 @@ import ABadge from 'ant-design-vue/es/badge'
 import ACard from 'ant-design-vue/es/card'
 import ADivider from 'ant-design-vue/es/divider'
 import AForm, { FormItem as AFormItem } from 'ant-design-vue/es/form'
-import AInput, { InputPassword as AInputPassword } from 'ant-design-vue/es/input'
+import AInput, { InputPassword as AInputPassword, Textarea as ATextarea } from 'ant-design-vue/es/input'
 import AModal from 'ant-design-vue/es/modal'
 import APopconfirm from 'ant-design-vue/es/popconfirm'
 import AProgress from 'ant-design-vue/es/progress'
@@ -222,10 +224,11 @@ const route = useRoute()
 const router = useRouter()
 const apiBases = getApiBases()
 const apiEndpoints = apiBases.map((value, index) => ({ label: apiBases.length > 1 ? `站点 ${index + 1}` : '当前站点', value }))
-const initialApiIndex = normalizeApiIndex(route.query.api)
+const initialApiIndex = normalizeApiIndex(route.query.api ?? route.query.apiIndex)
 const apiEndpoint = ref(apiEndpoints[initialApiIndex]?.value ?? apiEndpoints[0]!.value)
 const apiIndex = computed(() => Math.max(0, apiBases.indexOf(apiEndpoint.value)))
 const apiSecret = ref('')
+const settingsApiIndex = ref<number | null>(null)
 const search = ref('')
 const statusFilter = ref('all')
 const refreshing = ref(false)
@@ -246,9 +249,10 @@ const testingNotification = ref(false)
 const queryingQuota = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const feedback = ref<{ type: 'success' | 'info' | 'warning' | 'error'; message: string } | null>(null)
+let adminLoadRun = 0
 
 const columns = [
-  { title: '排序', key: 'sort', width: 72, fixed: 'left' as const }, { title: '服务器', key: 'name', width: 210, fixed: 'left' as const }, { title: '分组', key: 'group', width: 100 }, { title: '标签', key: 'tags', width: 170 }, { title: '备注', key: 'note', width: 150 }, { title: '费用', key: 'billing', width: 115 }, { title: '到期时间', key: 'expire', width: 125 }, { title: '流量', key: 'traffic', width: 100 }, { title: 'Agent', key: 'version', width: 90 }, { title: '状态', key: 'status', width: 90 }, { title: '启用', key: 'enabled', width: 70 }, { title: '操作', key: 'actions', width: 140, fixed: 'right' as const },
+  { title: '排序', key: 'sort', width: 72, fixed: 'left' as const }, { title: '服务器', key: 'name', width: 210, fixed: 'left' as const }, { title: '分组', key: 'group', width: 100 }, { title: '标签', key: 'tags', width: 170 }, { title: '备注', key: 'note', width: 150 }, { title: '费用', key: 'billing', width: 115 }, { title: '到期时间', key: 'expire', width: 125 }, { title: '流量', key: 'traffic', width: 100 }, { title: 'Agent', key: 'version', width: 90 }, { title: '状态', key: 'status', width: 90 }, { title: '公开', key: 'enabled', width: 70 }, { title: '操作', key: 'actions', width: 140, fixed: 'right' as const },
 ]
 
 const stats = computed(() => {
@@ -274,54 +278,90 @@ const filteredServers = computed(() => {
 const rowSelection = computed(() => ({ selectedRowKeys: selectedIds.value, onChange: (keys: Array<string | number>) => { selectedIds.value = keys.map(String) } }))
 const passwordError = computed(() => settings.adminPassword && settings.adminPassword !== settings.confirmPassword ? '两次输入的密码不一致' : '')
 const quotaItems = ref<Array<{ label: string; used: string; limit: string; percent: number }>>([])
+const pingDefaults = computed(() => ({
+  customCt: settings.customCt,
+  customCu: settings.customCu,
+  customCm: settings.customCm,
+  customBd: settings.customBd,
+}))
 
 const setFeedback = (type: 'success' | 'info' | 'warning' | 'error', message: string) => {
   feedback.value = { type, message }
 }
 
-async function loadServers() {
-  const data = await runAdminAction<AdminListResponse>('list', {}, apiIndex.value)
+async function loadServers(requestedIndex = apiIndex.value, requestedRun = adminLoadRun) {
+  const data = await runAdminAction<AdminListResponse>('list', {}, requestedIndex)
+  if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
   servers.value = (data.servers || []).map((server) => toManagedServer(server))
   apiStats.value = data.stats || {}
   selectedIds.value = selectedIds.value.filter((id) => servers.value.some((server) => server.id === id))
 }
 
-async function loadSettings() {
-  const data = await runAdminAction<AdminSettingsResponse>('get_settings', {}, apiIndex.value)
-  if (data.settings) applyAdminSettings(settings, data.settings)
+async function loadSettings(requestedIndex = apiIndex.value, requestedRun = adminLoadRun) {
+  const data = await runAdminAction<AdminSettingsResponse>('get_settings', {}, requestedIndex)
+  if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
+  if (!data.settings) throw new Error('后端未返回站点设置')
+  applyAdminSettings(settings, data.settings)
   apiSecret.value = String(data.api_secret || '')
+  settingsApiIndex.value = requestedIndex
 }
 
 async function loadAdmin() {
+  const currentRun = ++adminLoadRun
+  const requestedIndex = apiIndex.value
   refreshing.value = true
+  feedback.value = null
   try {
-    await Promise.all([loadServers(), loadSettings()])
+    await Promise.all([
+      loadServers(requestedIndex, currentRun),
+      loadSettings(requestedIndex, currentRun),
+    ])
   } catch (error) {
-    setFeedback('error', error instanceof Error ? error.message : '管理数据加载失败')
+    if (currentRun === adminLoadRun) setFeedback('error', error instanceof Error ? error.message : '管理数据加载失败')
   } finally {
-    refreshing.value = false
+    if (currentRun === adminLoadRun) refreshing.value = false
   }
 }
 
-function openCreateModal() { editingServer.value = null; serverModalOpen.value = true }
+function openCreateModal() {
+  if (settingsApiIndex.value !== apiIndex.value) return
+  editingServer.value = null
+  serverModalOpen.value = true
+}
 function adminDetailHref(id: string) { return `#/server/${encodeURIComponent(id)}?api=${apiIndex.value}` }
 function openEditModal(server: ManagedServer | Record<string, unknown>) { editingServer.value = server as ManagedServer; serverModalOpen.value = true }
-function openCommandModal(server: ManagedServer | Record<string, unknown>) { commandServer.value = server as ManagedServer; commandModalOpen.value = true }
+function openCommandModal(server: ManagedServer | Record<string, unknown>) {
+  if (settingsApiIndex.value !== apiIndex.value) return
+  const value = server as ManagedServer
+  commandServer.value = {
+    ...value,
+    customCt: value.customCt || settings.customCt,
+    customCu: value.customCu || settings.customCu,
+    customCm: value.customCm || settings.customCm,
+    customBd: value.customBd || settings.customBd,
+  }
+  commandModalOpen.value = true
+}
 function openDeleteModal(server: ManagedServer | Record<string, unknown>) { deletingServer.value = server as ManagedServer; deleteModalOpen.value = true }
 function editFromCommand(server: ManagedServer) { commandModalOpen.value = false; openEditModal(server) }
 async function saveServer(server: ManagedServer) {
+  const requestedIndex = apiIndex.value
+  let saved = server
   try {
-    const existing = servers.value.some((item) => item.id === server.id)
-    let saved = server
+    const existing = !server.id.startsWith('draft-') || servers.value.some((item) => item.id === server.id)
     if (!existing) {
-      const added = await runAdminAction<AdminOperationResponse>('add', { name: server.name, server_group: server.group, region: server.region }, apiIndex.value)
+      const added = await runAdminAction<AdminOperationResponse>('add', { name: server.name, server_group: server.group, region: server.region }, requestedIndex)
       if (!added.id) throw new Error('后端未返回新服务器 ID')
       saved = { ...server, id: added.id }
     }
-    await runAdminAction('edit', toAdminServerPayload(saved), apiIndex.value)
+    await runAdminAction('edit', toAdminServerPayload(saved), requestedIndex)
+    if (requestedIndex !== apiIndex.value) return
     await loadServers()
     setFeedback('success', `${saved.name} 已保存`)
   } catch (error) {
+    if (requestedIndex !== apiIndex.value) return
+    editingServer.value = saved
+    serverModalOpen.value = true
     setFeedback('error', error instanceof Error ? error.message : '服务器保存失败')
   }
 }
@@ -352,9 +392,11 @@ async function batchDelete() {
 }
 
 async function moveServer(id: string, offset: number) {
+  const visibleIndex = filteredServers.value.findIndex((server) => server.id === id)
+  const neighbor = filteredServers.value[visibleIndex + offset]
   const index = servers.value.findIndex((server) => server.id === id)
-  const next = index + offset
-  if (index < 0 || next < 0 || next >= servers.value.length) return
+  const next = neighbor ? servers.value.findIndex((server) => server.id === neighbor.id) : -1
+  if (index < 0 || next < 0) return
   const copy = [...servers.value]
   ;[copy[index], copy[next]] = [copy[next]!, copy[index]!]
   servers.value = copy
@@ -379,21 +421,25 @@ async function toggleServerEnabled(value: ManagedServer | Record<string, unknown
 }
 
 async function refreshServers() {
+  const requestedIndex = apiIndex.value
+  const requestedRun = adminLoadRun
   refreshing.value = true
   try {
-    await loadServers()
+    await loadServers(requestedIndex, requestedRun)
+    if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
     setFeedback('info', '监控数据已刷新')
   } catch (error) {
+    if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
     setFeedback('error', error instanceof Error ? error.message : '刷新失败')
   } finally {
-    refreshing.value = false
+    if (requestedIndex === apiIndex.value && requestedRun === adminLoadRun) refreshing.value = false
   }
 }
 async function copyNote(note: string) { if (!note) return; await navigator.clipboard?.writeText(note); feedback.value = { type: 'success', message: '备注已复制' } }
 function billingLabel(value: string) { return BILLING_CYCLES.find((item) => item.value === value)?.shortLabelZh ?? '月' }
 function isExpiring(value: string) { return Boolean(value) && new Date(value).getTime() - Date.now() < 90 * 86_400_000 }
 async function saveSettings() {
-  if (passwordError.value || savingSettings.value) return
+  if (passwordError.value || savingSettings.value || settingsApiIndex.value !== apiIndex.value) return
   if (!settings.adminUsername.trim()) return setFeedback('error', '管理员用户名不能为空')
   if (settings.jwtSecret && settings.jwtSecret.length < 32) return setFeedback('error', 'JWT Secret 至少需要 32 个字符')
   if ((settings.turnstileEnabled || settings.turnstileLoginEnabled) && (!settings.turnstileSiteKey || !settings.turnstileSecret)) {
@@ -417,6 +463,7 @@ async function saveSettings() {
 }
 
 async function testNotification() {
+  if (settingsApiIndex.value !== apiIndex.value) return
   testingNotification.value = true
   try {
     await runAdminAction('send_test_notification', { tg_bot_token: settings.telegramBotToken, tg_chat_id: settings.telegramChatId }, apiIndex.value)
@@ -429,6 +476,7 @@ async function testNotification() {
 }
 
 async function queryQuota() {
+  if (settingsApiIndex.value !== apiIndex.value) return
   queryingQuota.value = true
   try {
     const data = await runAdminAction<AdminUsageResponse>('d1_usage', {
@@ -470,13 +518,18 @@ async function importServers(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
+  const requestedIndex = apiIndex.value
+  const requestedRun = adminLoadRun
   try {
     const imported: unknown = JSON.parse(await file.text())
+    if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
     if (!Array.isArray(imported)) throw new Error('备份文件必须是服务器数组')
-    const result = await runAdminAction<AdminOperationResponse>('import_servers', { servers: imported }, apiIndex.value)
+    const result = await runAdminAction<AdminOperationResponse>('import_servers', { servers: imported }, requestedIndex)
+    if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
     await loadServers()
     setFeedback('success', String(result.message || `已处理 ${imported.length} 台服务器`))
   } catch (error) {
+    if (requestedIndex !== apiIndex.value || requestedRun !== adminLoadRun) return
     feedback.value = { type: 'error', message: error instanceof Error ? error.message : '导入失败' }
   } finally {
     input.value = ''
@@ -497,6 +550,21 @@ function logout() {
 watch(apiEndpoint, async (value) => {
   const nextIndex = Math.max(0, apiBases.indexOf(value))
   if (String(route.query.api ?? '') === String(nextIndex)) return
+  adminLoadRun += 1
+  refreshing.value = true
+  servers.value = []
+  apiStats.value = {}
+  selectedIds.value = []
+  settingsApiIndex.value = null
+  Object.assign(settings, createDefaultSettings())
+  apiSecret.value = ''
+  serverModalOpen.value = false
+  commandModalOpen.value = false
+  deleteModalOpen.value = false
+  quotaModalOpen.value = false
+  editingServer.value = null
+  commandServer.value = null
+  deletingServer.value = null
   await router.replace({ name: 'admin', query: { ...route.query, api: String(nextIndex) } })
 })
 watch(() => route.query.api, async (value) => {

@@ -22,11 +22,11 @@ import type { ManagedServer, TargetOS } from '../data/admin'
 import { buildUninstallCommand, targetOSOptions } from '../utils/mock-admin'
 
 const open = defineModel<boolean>('open', { required: true })
-const props = defineProps<{ server: ManagedServer | null }>()
+const props = defineProps<{ server: ManagedServer | null; apiBase: string }>()
 defineEmits<{ confirm: [id: string] }>()
 const targetOS = ref<TargetOS>('linux')
 const copied = ref(false)
-const command = computed(() => props.server ? buildUninstallCommand(props.server, targetOS.value) : '')
+const command = computed(() => props.server ? buildUninstallCommand(props.server, targetOS.value, props.apiBase) : '')
 watch([open, targetOS], () => { copied.value = false })
 async function copy() { await navigator.clipboard?.writeText(command.value); copied.value = true }
 </script>

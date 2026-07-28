@@ -27,6 +27,7 @@ import { normalizeTimestamp } from '../utils/time'
 
 interface BufferedSample {
   serverId: string
+  source?: string
   timestamp: number
   data: Record<string, unknown>
   reportTimestamp: number
@@ -39,6 +40,16 @@ interface QueueOptions {
 
 const PLAYBACK_TICK_MS = 1_000
 const MAX_BUFFER_SAMPLES_PER_SERVER = 600
+export const MAX_SERVER_IDS_PER_SOCKET = 500
+
+export const serverKey = (serverId: string, source?: string): string => `${source || ''}\u0000${serverId}`
+export function chunkServerIds(ids: readonly string[], size = MAX_SERVER_IDS_PER_SOCKET): string[][] {
+  const chunkSize = Math.max(1, Math.floor(size))
+  const uniqueIds = [...new Set(ids.filter(Boolean))]
+  return Array.from({ length: Math.ceil(uniqueIds.length / chunkSize) }, (_, index) => (
+    uniqueIds.slice(index * chunkSize, (index + 1) * chunkSize)
+  ))
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -102,6 +113,7 @@ export function useDashboard() {
     globalSpeedOut: 0,
   })
   const sysConfig = ref<DashboardConfig>({ ...DEFAULT_DASHBOARD_CONFIG })
+  const siteConfigs = ref<Record<string, DashboardConfig>>({})
   const regionStats = ref<Record<string, number>>({})
   const unknownCount = ref(0)
   const currentView = ref<DashboardView>('bar')
@@ -188,13 +200,15 @@ export function useDashboard() {
   }
 
   const applyServerSample = (sample: BufferedSample, displayTimestamp: number) => {
-    const index = servers.value.findIndex((server) => server.id === sample.serverId)
+    const key = serverKey(sample.serverId, sample.source)
+    const index = servers.value.findIndex((server) => serverKey(server.id, server.source) === key)
     const existing = index >= 0 ? servers.value[index] : undefined
     const reportTimestamp = normalizeTimestamp(sample.reportTimestamp, getReportTimestamp(existing, now.value))!
     const merged = withDisplayTiming({
       ...existing,
       ...sample.data,
       id: sample.serverId,
+      source: sample.source ?? existing?.source,
       name: existing?.name ?? sample.serverId,
       report_timestamp: reportTimestamp,
       last_updated: reportTimestamp,
@@ -206,18 +220,19 @@ export function useDashboard() {
     else servers.value.push(merged)
   }
 
-  const applyPlaybackSamplesForServer = (serverId: string, displayTimestamp?: number) => {
-    const samples = playbackBuffers.get(serverId)
+  const applyPlaybackSamplesForServer = (key: string, displayTimestamp?: number) => {
+    const samples = playbackBuffers.get(key)
     if (!samples?.length) return
 
-    const server = servers.value.find((item) => item.id === serverId)
+    const first = samples[0]!
+    const server = servers.value.find((item) => serverKey(item.id, item.source) === serverKey(first.serverId, first.source))
     const ownTimestamp = normalizeTimestamp(displayTimestamp, getDisplayTimestamp(server))
     if (!ownTimestamp) return
 
     let selected: BufferedSample | undefined
     while (samples.length && samples[0]!.timestamp <= ownTimestamp) selected = samples.shift()
     if (selected) applyServerSample(selected, ownTimestamp)
-    if (!samples.length) playbackBuffers.delete(serverId)
+    if (!samples.length) playbackBuffers.delete(key)
   }
 
   const queueLiveSamples = (
@@ -225,6 +240,7 @@ export function useDashboard() {
     samples: readonly LiveSample[],
     reportTimestamp: number,
     options: QueueOptions = {},
+    source?: string,
   ) => {
     const normalized = samples.flatMap((sample): BufferedSample[] => {
       const data = getSampleData(sample)
@@ -234,11 +250,12 @@ export function useDashboard() {
           ?? data?.last_updated as string | number | null | undefined
           ?? data?.timestamp as string | number | null | undefined,
       )
-      return data && timestamp ? [{ serverId, timestamp, data, reportTimestamp }] : []
+      return data && timestamp ? [{ serverId, source, timestamp, data, reportTimestamp }] : []
     }).sort((left, right) => left.timestamp - right.timestamp)
     if (!normalized.length) return
 
-    const current = servers.value.find((server) => server.id === serverId)
+    const key = serverKey(serverId, source)
+    const current = servers.value.find((server) => serverKey(server.id, server.source) === key)
     const currentSampleTimestamp = getSampleTimestamp(current)
     const incoming = options.replayCachedReport
       ? normalized
@@ -253,16 +270,16 @@ export function useDashboard() {
     ).slice(-MAX_BUFFER_SAMPLES_PER_SERVER)
 
     if (uniqueSamples.length === 1) {
-      playbackBuffers.delete(serverId)
+      playbackBuffers.delete(key)
       applyServerSample(uniqueSamples[0]!, playbackStart)
       return
     }
 
-    playbackBuffers.set(serverId, uniqueSamples)
-    applyPlaybackSamplesForServer(serverId, playbackStart)
+    playbackBuffers.set(key, uniqueSamples)
+    applyPlaybackSamplesForServer(key, playbackStart)
   }
 
-  const queueLiveMessage = (value: unknown, options: QueueOptions = {}) => {
+  const queueLiveMessage = (value: unknown, options: QueueOptions = {}, source?: string) => {
     if (!isRecord(value) || value.type !== 'batchUpdate' || !Array.isArray(value.updates)) return
     const message = value as unknown as BatchUpdateMessage
     const messageReportTimestamp = normalizeTimestamp(message.ts, Date.now())!
@@ -276,7 +293,7 @@ export function useDashboard() {
       queueLiveSamples(update.serverId, update.samples, reportTimestamp, {
         ...options,
         reportAgeMs: options.replayCachedReport ? update.reportAgeMs : 0,
-      })
+      }, update.source || source)
     }
   }
 
@@ -287,9 +304,9 @@ export function useDashboard() {
   }
 
   const mergeServers = (rawServers: readonly DashboardServer[]) => {
-    const existingById = new Map(servers.value.map((server) => [server.id, server]))
+    const existingById = new Map(servers.value.map((server) => [serverKey(server.id, server.source), server]))
     return rawServers.map((server) => {
-      const previous = existingById.get(server.id)
+      const previous = existingById.get(serverKey(server.id, server.source))
       const sampleTimestamp = normalizeTimestamp(
         server.sample_timestamp ?? server.timestamp ?? server.last_updated,
         getSampleTimestamp(previous),
@@ -308,11 +325,19 @@ export function useDashboard() {
 
   const applyDashboardData = (data: MergedDashboardData) => {
     servers.value = mergeServers(data.servers)
+    siteConfigs.value = Object.fromEntries(Object.entries(data.siteConfigs).map(([baseUrl, config]) => [baseUrl, { ...config }]))
+    const resolvedConfig = hasMultipleApiBases()
+      ? data.siteConfigs[getApiBases()[0]!]
+      : data.sysConfig
+    if (!resolvedConfig) {
+      recomputeStats(now.value)
+      return
+    }
     sysConfig.value = {
       ...sysConfig.value,
-      ...data.sysConfig,
-      display_mode: normalizeDisplayMode(data.sysConfig.display_mode),
-      site_title: sysConfig.value.site_title || data.sysConfig.site_title,
+      ...resolvedConfig,
+      display_mode: normalizeDisplayMode(resolvedConfig.display_mode),
+      site_title: sysConfig.value.site_title || resolvedConfig.site_title,
     }
     recomputeStats(now.value)
   }
@@ -332,6 +357,7 @@ export function useDashboard() {
   }
 
   const refresh = async () => {
+    isLoading.value = true
     playbackBuffers.clear()
     error.value = null
     const bases = getApiBases()
@@ -344,7 +370,7 @@ export function useDashboard() {
         const data = await fetchServersAllWithProgress((progress) => {
           completedSites += 1
           applyDashboardData(progress)
-          corsErrorSites.value = progress.corsErrorSites ?? []
+          corsErrorSites.value = (progress.siteErrors ?? []).map((item) => `${item.baseUrl}: ${item.message}`)
           sitesRemaining.value = Math.max(0, bases.length - completedSites)
           isLoading.value = false
         })
@@ -353,12 +379,14 @@ export function useDashboard() {
         const data = await fetchServersAll()
         applyDashboardData(data)
         replayLatestReports(data.latestReportUpdates)
+        corsErrorSites.value = (data.siteErrors ?? []).map((item) => `${item.baseUrl}: ${item.message}`)
         sitesRemaining.value = 0
       }
     } catch (caught) {
       error.value = caught instanceof Error ? caught : new Error(String(caught))
     } finally {
       isLoading.value = false
+      startLiveSockets()
     }
   }
 
@@ -374,7 +402,7 @@ export function useDashboard() {
       return withDisplayTiming(server, nextDisplayTimestamp, currentTimestamp)
     })
 
-    for (const serverId of playbackBuffers.keys()) applyPlaybackSamplesForServer(serverId)
+    for (const key of playbackBuffers.keys()) applyPlaybackSamplesForServer(key)
   }
 
   const tick = () => {
@@ -406,13 +434,13 @@ export function useDashboard() {
     sockets = bases.flatMap((_, index) => {
       const ids = idsByIndex.get(index)
       if (!ids?.length) return []
-      return [createLiveSocket('all', {
+      return chunkServerIds(ids).map((serverIds) => createLiveSocket('all', {
         replay: false,
-        onMessage: queueLiveMessage,
+        onMessage: (message) => queueLiveMessage(message, {}, bases[index]),
         onStatus: () => {
           liveConnected.value = sockets.some((socket) => socket.isConnected)
         },
-      }, index, ids)]
+      }, index, serverIds))
     })
   }
 
@@ -435,7 +463,6 @@ export function useDashboard() {
     const savedView = localStorage.getItem(STORAGE.VIEW_PREFERENCE)
     currentView.value = normalizeDashboardView(savedView, sysConfig.value.display_mode)
     await refresh()
-    startLiveSockets()
     tick()
     tickInterval = setInterval(tick, PLAYBACK_TICK_MS)
   }
@@ -454,6 +481,7 @@ export function useDashboard() {
     servers,
     stats,
     sysConfig,
+    siteConfigs,
     regionStats,
     unknownCount,
     currentView,

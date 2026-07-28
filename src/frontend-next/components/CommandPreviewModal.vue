@@ -7,8 +7,8 @@
         <a-descriptions-item label="上报间隔">{{ server.reportInterval }} 秒</a-descriptions-item>
         <a-descriptions-item label="流量重置">每月 {{ server.resetDay }} 日</a-descriptions-item>
         <a-descriptions-item label="自动更新">{{ server.autoUpdate ? '启用' : '关闭' }}</a-descriptions-item>
-        <a-descriptions-item label="下行修正">{{ server.rxCorrection }} GB</a-descriptions-item>
-        <a-descriptions-item label="上行修正">{{ server.txCorrection }} GB</a-descriptions-item>
+        <a-descriptions-item label="下行修正">{{ correctionText(server.rxCorrection) }}</a-descriptions-item>
+        <a-descriptions-item label="上行修正">{{ correctionText(server.txCorrection) }}</a-descriptions-item>
       </a-descriptions>
       <pre class="command-block">{{ command }}</pre>
       <div class="command-modal-actions"><a-button @click="$emit('edit', server)"><template #icon><EditOutlined /></template>编辑参数</a-button><a-button type="primary" @click="copy"><template #icon><CopyOutlined /></template>{{ copied ? '已复制' : '复制命令' }}</a-button></div>
@@ -33,5 +33,6 @@ const targetOS = ref<TargetOS>('linux')
 const copied = ref(false)
 const command = computed(() => props.server ? buildInstallCommand(props.server, targetOS.value, props.apiBase, props.apiSecret) : '')
 watch([open, targetOS], () => { copied.value = false })
+function correctionText(value: number | null) { return value === null ? '未设置' : `${value} GB` }
 async function copy() { await navigator.clipboard?.writeText(command.value); copied.value = true }
 </script>

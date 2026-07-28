@@ -62,7 +62,7 @@ function authenticatedTarget(to: RouteLocationNormalized, apiIndex: number) {
 }
 
 router.beforeEach(async (to) => {
-  const apiIndex = normalizeApiIndex(to.query.api)
+  const apiIndex = normalizeApiIndex(to.query.api ?? to.query.apiIndex)
   if (to.meta.requiresAuth) {
     return await hasValidAdminSession(apiIndex) ? true : loginLocation(to, apiIndex)
   }

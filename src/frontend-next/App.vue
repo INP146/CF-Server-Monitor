@@ -29,7 +29,7 @@ import {
   clearTurnstileToken,
   fetchAllTurnstileConfigs,
   getTurnstileEnabledSites,
-  hasTurnstileSiteKeyMismatch,
+  getNextTurnstileSite,
   loadTurnstileScript,
   setTurnstileToken,
 } from './utils/turnstile'
@@ -40,6 +40,13 @@ const accessState = ref<'loading' | 'ready' | 'error'>('loading')
 const accessError = ref('')
 let appMounted = false
 let accessRun = 0
+let accessWidgetId: string | null = null
+
+function removeAccessWidget() {
+  if (!accessWidgetId || !window.turnstile) return
+  try { window.turnstile.remove(accessWidgetId) } catch { /* The widget may already be detached. */ }
+  accessWidgetId = null
+}
 
 function toggleTheme() {
   isDark.value = !isDark.value
@@ -61,6 +68,7 @@ const themeConfig = computed(() => ({
 
 async function initializeAccess() {
   const currentRun = ++accessRun
+  removeAccessWidget()
   accessState.value = 'loading'
   accessError.value = ''
   if (route.path.startsWith('/admin')) {
@@ -76,18 +84,20 @@ async function initializeAccess() {
       accessState.value = 'ready'
       return
     }
-    if (hasTurnstileSiteKeyMismatch(enabledSites)) {
-      throw new Error('多个监控站点的 Turnstile Site Key 不一致')
+    const site = getNextTurnstileSite(enabledSites)
+    if (!site) {
+      accessState.value = 'ready'
+      return
     }
-
-    const site = enabledSites[0]!
+    if (!site.siteKey) throw new Error(`站点 ${site.index + 1} 未配置 Turnstile Site Key`)
     await loadTurnstileScript()
     await nextTick()
     if (currentRun !== accessRun) return
     if (!window.turnstile) throw new Error('Turnstile 脚本加载失败')
 
-    window.turnstile.render('#global-turnstile-container', {
+    accessWidgetId = window.turnstile.render('#global-turnstile-container', {
       sitekey: site.siteKey,
+      action: 'turnstile-spin-v1',
       callback: async (token) => {
         if (currentRun !== accessRun) return
         setTurnstileToken(token)
@@ -97,20 +107,20 @@ async function initializeAccess() {
           autoRedirect: false,
         })
         if (currentRun !== accessRun) return
-        if (!verification.error && verification.data?.verified === true) accessState.value = 'ready'
+        if (!verification.error && verification.data?.verified === true) void initializeAccess()
         else {
           clearTurnstileToken()
           accessError.value = verification.message || verification.error || '请重新完成安全验证'
           accessState.value = 'error'
         }
       },
-      errorCallback: () => {
+      'error-callback': () => {
         if (currentRun !== accessRun) return
         clearTurnstileToken()
         accessError.value = '安全验证组件加载失败'
         accessState.value = 'error'
       },
-      expiredCallback: () => {
+      'expired-callback': () => {
         if (currentRun !== accessRun) return
         clearTurnstileToken()
         accessError.value = '安全验证已过期，请重试'
@@ -118,6 +128,7 @@ async function initializeAccess() {
       },
     })
   } catch (error) {
+    if (currentRun !== accessRun) return
     accessError.value = error instanceof Error ? error.message : '访问权限检查失败'
     accessState.value = 'error'
   }
@@ -137,6 +148,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   appMounted = false
+  removeAccessWidget()
   window.removeEventListener(TURNSTILE_EXPIRED_EVENT, handleTurnstileExpired)
 })
 </script>

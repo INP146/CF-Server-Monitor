@@ -18,6 +18,13 @@ export interface MockServer {
   uptime: string
   load: string
   tags: string[]
+  group?: string
+  priceText?: string
+  expireDate?: string
+  trafficUsed?: string
+  trafficLimitText?: string
+  trafficPercent?: number
+  dataTime?: string
   apiIndex?: number
 }
 

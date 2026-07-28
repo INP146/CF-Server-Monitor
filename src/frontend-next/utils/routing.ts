@@ -14,6 +14,7 @@ export function normalizeInternalRedirect(value: unknown, fallback = DEFAULT_ADM
 
 export function withApiIndex(route: string, apiIndex: number): string {
   const url = new URL(normalizeInternalRedirect(route), ROUTE_ORIGIN)
+  url.searchParams.delete('apiIndex')
   url.searchParams.set('api', String(Math.max(0, apiIndex)))
   return `${url.pathname}${url.search}${url.hash}`
 }
@@ -21,4 +22,3 @@ export function withApiIndex(route: string, apiIndex: number): string {
 export function getPostLoginTarget(redirect: unknown, apiIndex: number): string {
   return withApiIndex(normalizeInternalRedirect(redirect), apiIndex)
 }
-

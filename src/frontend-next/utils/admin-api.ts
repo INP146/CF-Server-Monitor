@@ -45,6 +45,12 @@ const number = (value: unknown, fallback = 0): number => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const nullableNumber = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === '') return null
+  const parsed = toNumber(value as NumericValue)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export function toManagedServer(server: DashboardServer, now = Date.now()): ManagedServer {
   const online = typeof server.is_online === 'boolean' ? server.is_online : isServerOnline(server, now)
   const ramTotal = number(server.ram_total)
@@ -90,8 +96,8 @@ export function toManagedServer(server: DashboardServer, now = Date.now()): Mana
     customCu: String(server.custom_cu || ''),
     customCm: String(server.custom_cm || ''),
     customBd: String(server.custom_bd || ''),
-    rxCorrection: number(server.rx_correction),
-    txCorrection: number(server.tx_correction),
+    rxCorrection: nullableNumber(server.rx_correction),
+    txCorrection: nullableNumber(server.tx_correction),
     autoUpdate: bool(server.auto_update),
     isHidden,
     offlineNotifyDisabled: bool(server.offline_notify_disabled),
@@ -139,6 +145,8 @@ export function applyAdminSettings(target: GlobalSettings, source: Record<string
   target.showUpdateTime = bool(source.show_time)
   target.showLongHistory = bool(source.show_long_history)
   target.backgroundImage = String(source.custom_bg || '')
+  target.customHead = String(source.custom_head || '')
+  target.customScript = String(source.custom_script || '')
   target.customCt = String(source.custom_ct || '')
   target.customCu = String(source.custom_cu || '')
   target.customCm = String(source.custom_cm || '')
@@ -162,6 +170,8 @@ export function toAdminSettingsPayload(settings: GlobalSettings): Record<string,
   return {
     site_title: settings.siteTitle,
     custom_bg: settings.backgroundImage,
+    custom_head: settings.customHead,
+    custom_script: settings.customScript,
     display_mode: settings.defaultView,
     is_public: String(settings.isPublic),
     show_price: String(settings.showPrice),
@@ -197,5 +207,10 @@ export async function runAdminAction<T = AdminOperationResponse>(
 ): Promise<T> {
   const result = await adminApi<T>({ action, ...payload }, apiIndex)
   if (result.error || !result.data) throw new Error(result.message || result.error || '请求失败')
+  if (typeof result.data === 'object' && result.data !== null && 'success' in result.data && result.data.success === false) {
+    const message = 'message' in result.data ? String(result.data.message || '') : ''
+    const error = 'error' in result.data ? String(result.data.error || '') : ''
+    throw new Error(message || error || '请求失败')
+  }
   return result.data
 }

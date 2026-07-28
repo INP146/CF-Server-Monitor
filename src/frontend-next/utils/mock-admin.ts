@@ -9,14 +9,20 @@ export const targetOSOptions: Array<{ label: string; value: TargetOS }> = [
   { label: 'Windows', value: 'windows' },
 ]
 
-const shellByOS: Record<TargetOS, string> = {
+const scriptByOS: Record<TargetOS, string> = {
   linux: 'install.sh',
   alpine: 'install-alpine.sh',
   openwrt: 'install-openwrt.sh',
-  mac: 'install-macos.sh',
+  mac: 'install-mac.sh',
   synology: 'install-synology.sh',
-  windows: 'install.ps1',
+  windows: 'cf-server-monitor.ps1',
 }
+
+export const getInstallerScript = (targetOS: TargetOS): string => scriptByOS[targetOS]
+
+const shellQuote = (value: unknown): string => `'${String(value ?? '').replace(/'/g, `'\\''`)}'`
+const powershellQuote = (value: unknown): string => `'${String(value ?? '').replace(/'/g, "''")}'`
+const hasCorrection = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
 
 export function buildInstallCommand(
   server: ManagedServer,
@@ -25,18 +31,59 @@ export function buildInstallCommand(
   apiSecret = '',
 ): string {
   const base = apiBase.replace(/\/+$/, '')
-  const args = `install -id=${server.id} -secret='${apiSecret}' -url=${base}/update`
+  const autoUpdate = server.autoUpdate ? 1 : 0
   if (targetOS === 'windows') {
-    return `irm ${base}/cf-server-monitor.ps1 -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 ${args}`
+    const parameters = [
+      'install',
+      `-Id ${powershellQuote(server.id)}`,
+      `-Secret ${powershellQuote(apiSecret)}`,
+      `-Url ${powershellQuote(`${base}/update`)}`,
+      `-CollectInterval ${server.collectInterval}`,
+      `-ReportInterval ${server.reportInterval}`,
+      `-ResetDay ${server.resetDay}`,
+      `-AutoUpdate ${autoUpdate}`,
+    ]
+    if (server.customCt) parameters.push(`-CtNode ${powershellQuote(server.customCt)}`)
+    if (server.customCu) parameters.push(`-CuNode ${powershellQuote(server.customCu)}`)
+    if (server.customCm) parameters.push(`-CmNode ${powershellQuote(server.customCm)}`)
+    if (server.customBd) parameters.push(`-BdNode ${powershellQuote(server.customBd)}`)
+    if (hasCorrection(server.rxCorrection)) parameters.push(`-RxCorrection ${server.rxCorrection}`)
+    if (hasCorrection(server.txCorrection)) parameters.push(`-TxCorrection ${server.txCorrection}`)
+    return `irm ${powershellQuote(`${base}/${getInstallerScript(targetOS)}`)} -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 ${parameters.join(' ')}`
   }
   const shell = targetOS === 'alpine' || targetOS === 'openwrt' ? 'sh' : 'bash'
-  return `curl -sL ${base}/${shellByOS[targetOS]} | ${shell} -s ${args}`
+  const sudo = targetOS === 'mac' ? 'sudo ' : ''
+  const parameters = [
+    'install',
+    `-id=${shellQuote(server.id)}`,
+    `-secret=${shellQuote(apiSecret)}`,
+    `-url=${shellQuote(`${base}/update`)}`,
+    `-collect_interval=${server.collectInterval}`,
+    `-interval=${server.reportInterval}`,
+    `-reset_day=${server.resetDay}`,
+    `-auto_update=${autoUpdate}`,
+  ]
+  if (server.customCt) parameters.push(`-ct=${shellQuote(server.customCt)}`)
+  if (server.customCu) parameters.push(`-cu=${shellQuote(server.customCu)}`)
+  if (server.customCm) parameters.push(`-cm=${shellQuote(server.customCm)}`)
+  if (server.customBd) parameters.push(`-bd=${shellQuote(server.customBd)}`)
+  if (hasCorrection(server.rxCorrection)) parameters.push(`-rx_correction=${server.rxCorrection}`)
+  if (hasCorrection(server.txCorrection)) parameters.push(`-tx_correction=${server.txCorrection}`)
+  return `curl -fsSL ${shellQuote(`${base}/${getInstallerScript(targetOS)}`)} | ${sudo}${shell} -s ${parameters.join(' ')}`
 }
 
-export function buildUninstallCommand(server: ManagedServer, targetOS: TargetOS): string {
-  if (targetOS === 'windows') return `Uninstall-EdgeProbe -ServerId ${server.id}`
-  if (targetOS === 'openwrt') return `/etc/init.d/edgeprobe stop && opkg remove edgeprobe # ${server.id}`
-  return `sudo edgeprobe-agent uninstall --id ${server.id}`
+export function buildUninstallCommand(
+  _server: ManagedServer,
+  targetOS: TargetOS,
+  apiBase = 'https://monitor.example.com',
+): string {
+  const base = apiBase.replace(/\/+$/, '')
+  if (targetOS === 'windows') {
+    return `irm ${powershellQuote(`${base}/${getInstallerScript(targetOS)}`)} -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 uninstall`
+  }
+  const shell = targetOS === 'alpine' || targetOS === 'openwrt' ? 'sh' : 'bash'
+  const sudo = targetOS === 'mac' ? 'sudo ' : ''
+  return `curl -fsSL ${shellQuote(`${base}/${getInstallerScript(targetOS)}`)} | ${sudo}${shell} -s uninstall`
 }
 
 export function serializeServers(servers: ManagedServer[]): string {

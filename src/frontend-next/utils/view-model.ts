@@ -1,7 +1,14 @@
 import type { MockServer } from '../data/dashboard'
 import type { DashboardServer, HistoryRecord, NumericValue } from '../types/dashboard'
 import { formatBytes, isServerOnline, toNumber } from './format'
-import { formatUptime } from './server-card'
+import { formatBillingPrice } from './server'
+import {
+  calcTrafficUsagePercent,
+  formatServerDataTime,
+  formatUptime,
+  getTrafficUsageBytes,
+} from './server-card'
+import { normalizeTimestamp } from './time'
 
 const percent = (used: NumericValue, total: NumericValue): number => {
   const totalValue = toNumber(total)
@@ -55,28 +62,51 @@ export function toDisplayServer(server: DashboardServer, now = Date.now(), apiIn
     uptime: online ? formatUptime(server.boot_time, now) : '-',
     load: online ? normalizedLoad(server.load_avg) : '- / - / -',
     tags: stringList(server.tags),
+    group: String(server.server_group || 'Default'),
+    priceText: formatBillingPrice(server),
+    expireDate: String(server.expire_date || ''),
+    trafficUsed: formatBytes(getTrafficUsageBytes(server)),
+    trafficLimitText: toNumber(server.traffic_limit) > 0 ? `${server.traffic_limit} GB` : '不限',
+    trafficPercent: calcTrafficUsagePercent(server),
+    dataTime: formatServerDataTime(server, online),
     apiIndex,
   }
 }
 
-export const historyNumbers = (history: readonly HistoryRecord[], field: string): number[] => history
-  .map((record) => Number.parseFloat(String(record[field] ?? '')))
-  .filter(Number.isFinite)
+export interface MetricPoint {
+  timestamp: number
+  value: number | null
+}
+
+function historyPoint(record: HistoryRecord, value: unknown): MetricPoint | null {
+  const timestamp = normalizeTimestamp(record.timestamp)
+  if (!timestamp) return null
+  const number = Number.parseFloat(String(value ?? ''))
+  return { timestamp, value: Number.isFinite(number) ? number : null }
+}
+
+export const historyNumbers = (history: readonly HistoryRecord[], field: string): MetricPoint[] => history
+  .flatMap((record) => {
+    const point = historyPoint(record, record[field])
+    return point ? [point] : []
+  })
 
 export const historyPercents = (
   history: readonly HistoryRecord[],
   usedField: string,
   totalField: string,
-): number[] => history.flatMap((record) => {
+): MetricPoint[] => history.flatMap((record) => {
   const total = Number.parseFloat(String(record[totalField] ?? ''))
   const used = Number.parseFloat(String(record[usedField] ?? ''))
-  return Number.isFinite(total) && total > 0 && Number.isFinite(used) ? [used / total * 100] : []
+  const value = Number.isFinite(total) && total > 0 && Number.isFinite(used) ? used / total * 100 : null
+  const point = historyPoint(record, value)
+  return point ? [point] : []
 })
 
-export function historyLoad(history: readonly HistoryRecord[], index: number): number[] {
+export function historyLoad(history: readonly HistoryRecord[], index: number): MetricPoint[] {
   return history.flatMap((record) => {
     const parts = String(record.load_avg ?? '').trim().split(/[\s/]+/)
-    const value = Number.parseFloat(parts[index] ?? '')
-    return Number.isFinite(value) ? [value] : []
+    const point = historyPoint(record, parts[index])
+    return point ? [point] : []
   })
 }

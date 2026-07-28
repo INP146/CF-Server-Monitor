@@ -39,6 +39,11 @@
       </span>
     </div>
 
+    <div v-if="(config.show_price && server.priceText) || (config.show_expire && server.expireDate)" class="server-commercial-meta">
+      <span v-if="config.show_price && server.priceText">费用 <strong>{{ server.priceText }}</strong></span>
+      <span v-if="config.show_expire && server.expireDate">到期 <strong>{{ server.expireDate }}</strong></span>
+    </div>
+
     <div class="metric-bars">
       <div v-for="metric in metrics" :key="metric.label" class="metric-row">
         <span>{{ metric.label }}</span>
@@ -70,12 +75,25 @@
       </div>
     </div>
 
+
+    <div v-if="config.show_tf" class="traffic-usage-row">
+      <span>月流量 {{ server.trafficUsed || '0 B' }} / {{ server.trafficLimitText || '不限' }}</span>
+      <a-progress
+        v-if="server.trafficLimitText && server.trafficLimitText !== '不限'"
+        :percent="Math.min(100, server.trafficPercent || 0)"
+        :show-info="false"
+        :stroke-width="5"
+        :status="(server.trafficPercent || 0) >= 95 ? 'exception' : 'normal'"
+      />
+    </div>
+
     <a-divider />
 
     <div class="server-card-foot">
       <span><ClockCircleOutlined /> 运行 {{ server.uptime }}</span>
       <span>负载 {{ server.load }}</span>
     </div>
+    <div v-if="config.show_time" class="server-data-time">数据时间 {{ server.dataTime || '-' }}</div>
   </a-card>
 </template>
 
@@ -97,12 +115,16 @@ import {
 } from '@ant-design/icons-vue'
 
 import type { MockServer } from '../data/dashboard'
+import type { DashboardConfig } from '../types/dashboard'
 import { getOSImage } from '../utils/os-icon'
+import { DEFAULT_SERVER_CARD_CONFIG } from '../utils/server-card'
 
 const props = withDefaults(defineProps<{
   server: MockServer
+  config?: DashboardConfig
   listView?: boolean
 }>(), {
+  config: () => ({ ...DEFAULT_SERVER_CARD_CONFIG, site_title: 'EdgeProbe' }),
   listView: false,
 })
 

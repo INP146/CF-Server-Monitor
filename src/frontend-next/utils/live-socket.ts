@@ -37,13 +37,18 @@ function parseBatchMessage(value: unknown): BatchUpdateMessage | null {
   return message as unknown as BatchUpdateMessage
 }
 
+export function normalizeLiveSocketScope(value: string): string {
+  const scope = value.trim()
+  return scope.toLowerCase() === 'all' ? 'all' : scope
+}
+
 export function createLiveSocket(
   subscribe = 'all',
   handlers: LiveSocketHandlers = {},
   apiIndex = 0,
   serverIds: readonly string[] = [],
 ): LiveSocketController {
-  const scope = subscribe.toLowerCase()
+  const scope = normalizeLiveSocketScope(subscribe)
   const replayTimers = new Set<ReturnType<typeof setTimeout>>()
   let socket: WebSocket | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null

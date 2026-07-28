@@ -52,6 +52,8 @@ export function createEmptyMergedData(): MergedDashboardData {
     stats: { ...DEFAULT_STATS },
     regionStats: {},
     sysConfig: { ...DEFAULT_DASHBOARD_CONFIG },
+    siteConfigs: {},
+    siteErrors: [],
   }
 }
 
@@ -65,6 +67,7 @@ export function mergeSiteResult(
   result: ApiResult<ServersResponse>,
   multiSite = hasMultipleApiBases(),
   localTitle = getTitle() || DEFAULT_SITE_TITLE,
+  primaryBaseUrl = getApiBases()[0],
 ): void {
   if (result.error || !result.data) return
 
@@ -87,13 +90,21 @@ export function mergeSiteResult(
 
   const config = result.data.sysConfig
   if (config) {
-    target.sysConfig = {
-      show_price: config.show_price ?? target.sysConfig.show_price,
-      show_expire: config.show_expire ?? target.sysConfig.show_expire,
-      show_tf: config.show_tf ?? target.sysConfig.show_tf,
-      show_time: config.show_time ?? target.sysConfig.show_time,
-      display_mode: resolveDisplayMode(config, target.sysConfig.display_mode),
-      site_title: multiSite ? localTitle : (config.site_title || target.sysConfig.site_title),
+    const previous = target.siteConfigs[result.baseUrl] ?? DEFAULT_DASHBOARD_CONFIG
+    const siteConfig: DashboardConfig = {
+      show_price: config.show_price ?? previous.show_price,
+      show_expire: config.show_expire ?? previous.show_expire,
+      show_tf: config.show_tf ?? previous.show_tf,
+      show_time: config.show_time ?? previous.show_time,
+      display_mode: resolveDisplayMode(config, previous.display_mode),
+      site_title: config.site_title || previous.site_title,
+    }
+    target.siteConfigs[result.baseUrl] = siteConfig
+    if (!multiSite || result.baseUrl === primaryBaseUrl) {
+      target.sysConfig = {
+        ...siteConfig,
+        site_title: multiSite ? localTitle : siteConfig.site_title,
+      }
     }
   }
 }
@@ -109,9 +120,17 @@ export async function fetchServersAll(): Promise<MergedDashboardData> {
   const merged = createEmptyMergedData()
   merged.sysConfig.site_title = multiSite ? localTitle : DEFAULT_SITE_TITLE
 
-  for (const result of await http.getAll<ServersResponse>('/api/servers')) {
+  const results = await http.getAll<ServersResponse>('/api/servers')
+  let successfulSites = 0
+  for (const result of results) {
+    if (result.error || !result.data) {
+      merged.siteErrors!.push({ baseUrl: result.baseUrl, message: result.message || result.error || '响应为空' })
+      continue
+    }
+    successfulSites += 1
     mergeSiteResult(merged, result, multiSite, localTitle)
   }
+  if (!successfulSites && results[0]) throw new ApiRequestError(results[0])
   return merged
 }
 
@@ -122,9 +141,18 @@ export async function fetchServersAllWithProgress(
   const localTitle = getTitle() || DEFAULT_SITE_TITLE
   const merged = createEmptyMergedData()
   const corsErrorSites: string[] = []
+  const siteErrors: Array<{ baseUrl: string; message: string }> = []
+  let successfulSites = 0
+  let firstError: ApiResult<ServersResponse> | null = null
   merged.sysConfig.site_title = multiSite ? localTitle : DEFAULT_SITE_TITLE
 
   await http.getAllWithProgress<ServersResponse>('/api/servers', (result) => {
+    if (result.error || !result.data) {
+      firstError ??= result
+      siteErrors.push({ baseUrl: result.baseUrl, message: result.message || result.error || '响应为空' })
+    } else {
+      successfulSites += 1
+    }
     mergeSiteResult(merged, result, multiSite, localTitle)
     if (result.corsError && !corsErrorSites.includes(result.baseUrl)) corsErrorSites.push(result.baseUrl)
     onResult({
@@ -134,16 +162,22 @@ export async function fetchServersAllWithProgress(
       stats: { ...merged.stats },
       regionStats: { ...merged.regionStats },
       sysConfig: { ...merged.sysConfig },
+      siteConfigs: Object.fromEntries(Object.entries(merged.siteConfigs).map(([baseUrl, config]) => [baseUrl, { ...config }])),
       corsErrorSites: [...corsErrorSites],
+      siteErrors: [...siteErrors],
     })
   })
 
+  merged.corsErrorSites = corsErrorSites
+  merged.siteErrors = siteErrors
+  if (!successfulSites && firstError) throw new ApiRequestError(firstError)
   return merged
 }
 
-export async function fetchServerDetail(id: string, apiIndex = 0): Promise<DashboardServer | null> {
+export async function fetchServerDetail(id: string, apiIndex = 0): Promise<DashboardServer> {
   const result = await http.getByIndex<DashboardServer>(`/api/server?id=${encodeURIComponent(id)}`, apiIndex)
-  return result.error ? null : result.data ?? null
+  if (result.error || !result.data) throw new ApiRequestError(result)
+  return result.data
 }
 
 export class ApiRequestError extends Error {
@@ -162,6 +196,7 @@ export async function fetchAllHistory(id: string, hours: number, apiIndex = 0): 
   const query = new URLSearchParams({ id, hours: String(hours) })
   const result = await http.getByIndex<HistoryRecord[]>(`/api/history/all?${query}`, apiIndex, {
     autoRedirect: false,
+    notifyTurnstileExpired: true,
   })
   if (result.error) throw new ApiRequestError(result)
   return Array.isArray(result.data) ? result.data : []
@@ -214,7 +249,7 @@ export async function fetchConfig(apiIndex = 0): Promise<SiteConfigResponse | nu
 async function runDatabaseOperation(path: string, apiIndex: number): Promise<OperationResponse> {
   const result = await http.postByIndex<OperationResponse>(path, {}, apiIndex, { autoRedirect: false })
   if (result.error) {
-    return { success: false, error: result.status === 401 ? 'Unauthorized' : 'Request failed' }
+    return { success: false, error: result.message || result.error }
   }
   return result.data ?? { success: true }
 }

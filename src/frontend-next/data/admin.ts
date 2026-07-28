@@ -22,8 +22,8 @@ export interface ManagedServer extends MockServer {
   customCu: string
   customCm: string
   customBd: string
-  rxCorrection: number
-  txCorrection: number
+  rxCorrection: number | null
+  txCorrection: number | null
   autoUpdate: boolean
   isHidden: boolean
   offlineNotifyDisabled: boolean
@@ -32,13 +32,14 @@ export interface ManagedServer extends MockServer {
 export interface GlobalSettings {
   siteTitle: string
   defaultView: 'bar' | 'ring' | 'table'
-  language: 'zh' | 'en'
   showPrice: boolean
   showExpire: boolean
   showTraffic: boolean
   showUpdateTime: boolean
   showLongHistory: boolean
   backgroundImage: string
+  customHead: string
+  customScript: string
   collectInterval: number
   reportInterval: number
   autoUpdate: boolean
@@ -89,8 +90,8 @@ export const createManagedServers = (): ManagedServer[] => dashboardServers.map(
   customCu: '',
   customCm: '',
   customBd: '',
-  rxCorrection: 0,
-  txCorrection: 0,
+  rxCorrection: null,
+  txCorrection: null,
   autoUpdate: index !== 5,
   isHidden: false,
   offlineNotifyDisabled: false,
@@ -99,13 +100,14 @@ export const createManagedServers = (): ManagedServer[] => dashboardServers.map(
 export const createDefaultSettings = (): GlobalSettings => ({
   siteTitle: 'EdgeProbe',
   defaultView: 'bar',
-  language: 'zh',
   showPrice: true,
   showExpire: true,
   showTraffic: true,
   showUpdateTime: true,
   showLongHistory: true,
   backgroundImage: '',
+  customHead: '',
+  customScript: '',
   collectInterval: 0,
   reportInterval: 60,
   autoUpdate: false,

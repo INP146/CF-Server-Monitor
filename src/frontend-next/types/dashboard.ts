@@ -92,7 +92,9 @@ export interface MergedDashboardData {
   stats: DashboardStats
   regionStats: Record<string, number>
   sysConfig: DashboardConfig
+  siteConfigs: Record<string, DashboardConfig>
   corsErrorSites?: string[]
+  siteErrors?: Array<{ baseUrl: string; message: string }>
 }
 
 export interface SiteConfigResponse extends Partial<DashboardConfig> {

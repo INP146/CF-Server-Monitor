@@ -1,6 +1,6 @@
 <template>
   <main class="login-page" :class="{ 'is-dark': isDark }">
-    <AppHeader subtitle="ADMIN LOGIN" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
+    <AppHeader :title="siteTitle" subtitle="ADMIN LOGIN" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
       <a-button type="text" href="#/">
         <template #icon><ArrowLeftOutlined /></template>
         返回监控页
@@ -22,14 +22,18 @@
           @finish="submitLogin"
         >
           <a-form-item label="管理站点" name="apiEndpoint">
-            <a-select v-model:value="formState.apiEndpoint" size="large">
+            <a-select v-model:value="formState.apiEndpoint" size="large" :disabled="submitting">
               <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">
                 {{ endpoint.label }} · {{ endpoint.value }}
               </a-select-option>
             </a-select>
           </a-form-item>
 
-          <a-alert v-if="loginError" type="error" show-icon :message="loginError" class="admin-feedback" />
+          <a-alert v-if="loginError" type="error" show-icon :message="loginError" class="admin-feedback">
+            <template v-if="turnstileConfigFailed" #action>
+              <a-button size="small" :loading="turnstileConfigLoading" @click="setupTurnstile">重试</a-button>
+            </template>
+          </a-alert>
 
           <a-form-item label="用户名" name="username">
             <a-input
@@ -55,10 +59,16 @@
             </a-input-password>
           </a-form-item>
 
-          <div v-if="turnstileRequired && !turnstileVerified" id="admin-turnstile-container" class="login-options" />
-          <a-alert v-else-if="turnstileVerified" type="success" show-icon message="安全验证已通过" class="login-options" />
+          <div v-if="turnstileRequired" id="admin-turnstile-container" class="login-options" />
 
-          <a-button type="primary" size="large" html-type="submit" block :loading="submitting">
+          <a-button
+            type="primary"
+            size="large"
+            html-type="submit"
+            block
+            :loading="submitting || turnstileConfigLoading"
+            :disabled="turnstileConfigFailed"
+          >
             <template #icon><LoginOutlined /></template>
             登录
           </a-button>
@@ -88,19 +98,20 @@ import { useTurnstile } from '../composables/useTurnstile'
 import { login } from '../utils/api'
 import { normalizeApiIndex } from '../utils/auth'
 import { getApiBases } from '../utils/config'
-import { http } from '../utils/http'
 import { getPostLoginTarget } from '../utils/routing'
+import { requiresFreshLoginTurnstileToken } from '../utils/turnstile'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
 
 const submitting = ref(false)
 const loginError = ref('')
+const siteTitle = document.title || 'EdgeProbe'
 const route = useRoute()
 const router = useRouter()
 const bases = getApiBases()
 const apiEndpoints = bases.map((value, index) => ({ label: bases.length > 1 ? `站点 ${index + 1}` : '当前站点', value }))
-const initialApiIndex = normalizeApiIndex(route.query.api)
+const initialApiIndex = normalizeApiIndex(route.query.api ?? route.query.apiIndex)
 const formState = reactive({
   apiEndpoint: apiEndpoints[initialApiIndex]?.value ?? apiEndpoints[0]!.value,
   username: '',
@@ -111,7 +122,6 @@ const {
   turnstileLoginEnabled,
   turnstileSiteKey,
   turnstileToken,
-  turnstileVerified,
   loadTurnstileConfig,
   renderTurnstile,
   resetTurnstile,
@@ -119,6 +129,10 @@ const {
   clearTurnstile,
 } = useTurnstile()
 const turnstileRequired = ref(false)
+const turnstileConfigLoading = ref(true)
+const turnstileConfigFailed = ref(false)
+let turnstileSetupRun = 0
+let loginMounted = false
 
 const rules: Record<string, Rule[]> = {
   apiEndpoint: [{ required: true, message: '请选择管理站点', trigger: 'change' }],
@@ -129,30 +143,18 @@ const rules: Record<string, Rule[]> = {
 async function submitLogin() {
   if (submitting.value) return
   loginError.value = ''
-  if (turnstileRequired.value && !turnstileVerified.value && !turnstileToken.value) {
+  if (turnstileRequired.value && !turnstileToken.value) {
     loginError.value = '请先完成安全验证'
     return
   }
   submitting.value = true
   const apiIndex = Math.max(0, bases.indexOf(formState.apiEndpoint))
-  if (turnstileEnabled.value && !turnstileVerified.value && turnstileToken.value) {
-    const verification = await http.getByIndex<{ verified?: boolean }>('/api/config', apiIndex, {
-      includeAuth: false,
-      includeTurnstile: true,
-      autoRedirect: false,
-    })
-    if (verification.error || verification.data?.verified !== true) {
-      submitting.value = false
-      loginError.value = '安全验证失败，请重试'
-      clearTurnstile()
-      resetTurnstile('#admin-turnstile-container')
-      return
-    }
-  }
   const result = await login(formState.username, formState.password, turnstileToken.value, apiIndex)
   submitting.value = false
   if (result.error) {
-    loginError.value = result.status === 403 ? '安全验证失败，请重试' : (result.message || '用户名或密码错误')
+    loginError.value = result.status === 403
+      ? '安全验证失败，请重试'
+      : result.status === 401 ? '用户名或密码错误' : (result.message || result.error || '登录请求失败')
     formState.password = ''
     clearTurnstile()
     resetTurnstile('#admin-turnstile-container')
@@ -163,12 +165,30 @@ async function submitLogin() {
 }
 
 async function setupTurnstile() {
+  const currentRun = ++turnstileSetupRun
   const apiIndex = Math.max(0, bases.indexOf(formState.apiEndpoint))
-  await loadTurnstileConfig(apiIndex, bases.length > 1, loginError)
-  turnstileRequired.value = turnstileEnabled.value || turnstileLoginEnabled.value
-  if (turnstileRequired.value && !turnstileVerified.value && turnstileSiteKey.value) {
-    await nextTick()
-    renderTurnstile('#admin-turnstile-container', turnstileSiteKey.value)
+  turnstileConfigLoading.value = true
+  turnstileConfigFailed.value = false
+  try {
+    const loaded = await loadTurnstileConfig(apiIndex, bases.length > 1, loginError)
+    if (currentRun !== turnstileSetupRun) return
+    turnstileRequired.value = requiresFreshLoginTurnstileToken(turnstileEnabled.value, turnstileLoginEnabled.value)
+    if (!loaded) {
+      turnstileConfigFailed.value = true
+      return
+    }
+    if (turnstileRequired.value && !turnstileSiteKey.value) {
+      loginError.value = '当前站点未配置 Turnstile Site Key'
+      turnstileConfigFailed.value = true
+      return
+    }
+    if (turnstileRequired.value) {
+      await nextTick()
+      if (currentRun !== turnstileSetupRun) return
+      renderTurnstile('#admin-turnstile-container', turnstileSiteKey.value)
+    }
+  } finally {
+    if (currentRun === turnstileSetupRun) turnstileConfigLoading.value = false
   }
 }
 
@@ -177,8 +197,12 @@ watch(() => formState.apiEndpoint, async () => {
   if (String(route.query.api ?? '') !== String(apiIndex)) {
     await router.replace({ name: 'login', query: { ...route.query, api: String(apiIndex) } })
   }
-  await setupTurnstile()
+  if (loginMounted) await setupTurnstile()
 })
-onMounted(() => { void setupTurnstile() })
-onBeforeUnmount(() => removeTurnstile('#admin-turnstile-container'))
+onMounted(() => { loginMounted = true; void setupTurnstile() })
+onBeforeUnmount(() => {
+  loginMounted = false
+  turnstileSetupRun += 1
+  removeTurnstile('#admin-turnstile-container')
+})
 </script>

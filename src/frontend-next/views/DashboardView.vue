@@ -1,16 +1,20 @@
 <template>
   <div class="app-shell" :class="{ 'is-dark': isDark }">
     <main class="dashboard-main">
-      <AppHeader subtitle="SERVER MONITOR" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
+      <AppHeader :title="dashboard.sysConfig.value.site_title" subtitle="SERVER MONITOR" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
         <a-select v-if="apiEndpoints.length > 1" v-model:value="apiEndpoint" class="header-site-select" aria-label="监控站点">
           <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option>
         </a-select>
-        <a-button type="text" href="#/admin"><template #icon><SettingOutlined /></template>管理后台</a-button>
+        <a-button type="text" :href="adminHref"><template #icon><SettingOutlined /></template>管理后台</a-button>
       </AppHeader>
 
       <div class="dashboard-content">
-        <a-alert v-if="dashboard.error.value" type="error" show-icon message="监控数据加载失败" :description="dashboard.error.value.message" />
-        <a-alert v-else-if="dashboard.corsErrorSites.value.length" type="warning" show-icon message="部分站点无法访问" :description="dashboard.corsErrorSites.value.join('、')" />
+        <a-alert v-if="dashboard.error.value" type="error" show-icon message="监控数据加载失败" :description="dashboard.error.value.message">
+          <template #action><a-button size="small" :loading="dashboard.isLoading.value" @click="dashboard.refresh">重试</a-button></template>
+        </a-alert>
+        <a-alert v-else-if="dashboard.corsErrorSites.value.length" type="warning" show-icon message="部分站点无法访问" :description="dashboard.corsErrorSites.value.join('、')">
+          <template #action><a-button size="small" :loading="dashboard.sitesRemaining.value > 0" @click="dashboard.refresh">重试</a-button></template>
+        </a-alert>
         <FleetSummary
           :total="servers.length"
           :online="onlineCount"
@@ -35,39 +39,60 @@
                 <a-radio-button value="bar"><a-tooltip title="卡片视图"><AppstoreOutlined /></a-tooltip></a-radio-button>
                 <a-radio-button value="ring"><a-tooltip title="环形视图"><PieChartOutlined /></a-tooltip></a-radio-button>
                 <a-radio-button value="table"><a-tooltip title="表格视图"><UnorderedListOutlined /></a-tooltip></a-radio-button>
+                <a-radio-button value="map"><a-tooltip title="地图视图"><EnvironmentOutlined /></a-tooltip></a-radio-button>
               </a-radio-group>
             </div>
           </div>
 
           <div v-if="dashboard.isLoading.value" class="empty-result"><a-spin tip="正在加载监控数据" /></div>
 
-          <div v-else-if="filteredServers.length && view === 'bar'" class="server-grid">
-            <ServerCard v-for="server in filteredServers" :key="server.id" :server="server" />
-          </div>
-
-          <div v-else-if="filteredServers.length && view === 'ring'" class="ring-server-grid">
-            <a-card v-for="server in filteredServers" :key="server.id" class="ring-server-card" hoverable @click="openDetail(server.id)">
-              <div class="ring-card-head"><span><img :src="`/flags/${server.region}.svg`" alt="" /><strong>{{ server.name }}</strong></span><a-badge :status="server.status === 'online' ? 'success' : 'error'" /></div>
-              <div class="ring-metrics">
-                <div><a-progress type="circle" :size="84" :percent="server.cpu" :stroke-color="metricColor(server.cpu)" /><span>CPU</span></div>
-                <div><a-progress type="circle" :size="84" :percent="server.memory" :stroke-color="metricColor(server.memory)" /><span>内存</span></div>
-                <div><a-progress type="circle" :size="84" :percent="server.disk" :stroke-color="metricColor(server.disk)" /><span>磁盘</span></div>
+          <template v-else-if="filteredServers.length && view === 'bar'">
+            <section v-for="group in groupedFilteredServers" :key="group.name" class="server-group-section">
+              <h2 class="server-group-heading">{{ group.name }} <small>{{ group.servers.length }}</small></h2>
+              <div class="server-grid">
+                <ServerCard v-for="server in group.servers" :key="`${server.apiIndex || 0}-${server.id}`" :server="server" :config="serverConfig(server)" />
               </div>
-              <div class="ring-card-foot"><span>{{ server.location }}</span><span>{{ server.latency === null ? '超时' : `${server.latency} ms` }}</span></div>
-            </a-card>
-          </div>
+            </section>
+          </template>
 
-          <a-table v-else-if="filteredServers.length" class="dashboard-table" :columns="tableColumns" :data-source="filteredServers" row-key="id" :pagination="false" :scroll="{ x: 820 }" size="middle">
+          <template v-else-if="filteredServers.length && view === 'ring'">
+            <section v-for="group in groupedFilteredServers" :key="group.name" class="server-group-section">
+              <h2 class="server-group-heading">{{ group.name }} <small>{{ group.servers.length }}</small></h2>
+              <div class="ring-server-grid">
+                <a-card v-for="server in group.servers" :key="`${server.apiIndex || 0}-${server.id}`" class="ring-server-card" hoverable @click="openDetail(server)">
+                  <div class="ring-card-head"><span><img :src="`/flags/${server.region}.svg`" alt="" /><strong>{{ server.name }}</strong></span><a-badge :status="server.status === 'online' ? 'success' : 'error'" /></div>
+                  <div v-if="ringMeta(server).length" class="ring-card-meta"><span v-for="item in ringMeta(server)" :key="item">{{ item }}</span></div>
+                  <div class="ring-metrics">
+                    <div><a-progress type="circle" :size="84" :percent="server.cpu" :stroke-color="metricColor(server.cpu)" /><span>CPU</span></div>
+                    <div><a-progress type="circle" :size="84" :percent="server.memory" :stroke-color="metricColor(server.memory)" /><span>内存</span></div>
+                    <div><a-progress type="circle" :size="84" :percent="server.disk" :stroke-color="metricColor(server.disk)" /><span>磁盘</span></div>
+                  </div>
+                  <div class="ring-card-foot"><span>{{ server.location }}</span><span>{{ server.latency === null ? '超时' : `${server.latency} ms` }}</span></div>
+                  <div v-if="serverConfig(server).show_tf || serverConfig(server).show_time" class="ring-card-status">
+                    <span v-if="serverConfig(server).show_tf">月流量 {{ server.trafficUsed }} / {{ server.trafficLimitText }}</span>
+                    <span v-if="serverConfig(server).show_time">{{ server.dataTime }}</span>
+                  </div>
+                </a-card>
+              </div>
+            </section>
+          </template>
+
+          <DashboardMap v-else-if="filteredServers.length && view === 'map'" :regions="mapRegions" :is-dark="isDark" />
+
+          <a-table v-else-if="filteredServers.length && view === 'table'" class="dashboard-table" :columns="tableColumns" :data-source="filteredServers" :row-key="tableRowKey" :pagination="false" :scroll="{ x: 980 }" size="middle">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'name'"><a :href="detailHref(record)" class="table-server-link"><img :src="`/flags/${record.region}.svg`" alt="" /><span><strong>{{ record.name }}</strong><small>{{ record.location }}</small></span></a></template>
               <template v-else-if="column.key === 'usage'"><div class="table-usage"><span>CPU {{ record.cpu }}%</span><span>内存 {{ record.memory }}%</span><span>磁盘 {{ record.disk }}%</span></div></template>
               <template v-else-if="column.key === 'network'"><span class="mono-text">↓ {{ record.download }} · ↑ {{ record.upload }}</span></template>
+              <template v-else-if="column.key === 'billing'"><span class="table-meta-stack"><span v-if="serverConfig(record).show_price">{{ record.priceText || '-' }}</span><small v-if="serverConfig(record).show_expire">{{ record.expireDate || '无到期时间' }}</small></span></template>
+              <template v-else-if="column.key === 'traffic'"><span v-if="serverConfig(record).show_tf" class="table-meta-stack"><span>{{ record.trafficUsed }}</span><small>{{ record.trafficLimitText }}</small></span></template>
               <template v-else-if="column.key === 'latency'">{{ record.latency === null ? '超时' : `${record.latency} ms` }}</template>
+              <template v-else-if="column.key === 'updated'"><span v-if="serverConfig(record).show_time">{{ record.dataTime }}</span></template>
               <template v-else-if="column.key === 'status'"><a-badge :status="record.status === 'online' ? 'success' : 'error'" :text="record.status === 'online' ? '在线' : '离线'" /></template>
             </template>
           </a-table>
 
-          <a-empty v-else description="没有符合条件的节点" class="empty-result"><a-button size="small" @click="clearFilters">清除筛选</a-button></a-empty>
+          <a-empty v-else :description="emptyDescription" class="empty-result"><a-button v-if="hasActiveFilters" size="small" @click="clearFilters">清除筛选</a-button></a-empty>
         </section>
       </div>
     </main>
@@ -88,13 +113,16 @@ import { RadioButton as ARadioButton, RadioGroup as ARadioGroup } from 'ant-desi
 import ASelect, { SelectOption as ASelectOption } from 'ant-design-vue/es/select'
 import ASpin from 'ant-design-vue/es/spin'
 import ATable from 'ant-design-vue/es/table'
-import { AppstoreOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
+import { AppstoreOutlined, EnvironmentOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
 
 import AppHeader from '../components/AppHeader.vue'
+import DashboardMap from '../components/DashboardMap.vue'
 import FleetSummary from '../components/FleetSummary.vue'
 import ServerCard from '../components/ServerCard.vue'
 import { useDashboard } from '../composables/useDashboard'
-import { formatBytes } from '../utils/format'
+import type { MockServer } from '../data/dashboard'
+import type { DashboardView } from '../types/dashboard'
+import { formatBytes, isServerOnline } from '../utils/format'
 import { getApiBases } from '../utils/config'
 import { toDisplayServer } from '../utils/view-model'
 
@@ -106,8 +134,8 @@ const dashboard = useDashboard()
 const toolbarRef = ref<HTMLElement | null>(null)
 const isToolbarStacked = ref(false)
 let toolbarResizeObserver: ResizeObserver | null = null
-const view = computed<'bar' | 'ring' | 'table'>({
-  get: () => dashboard.currentView.value === 'map' ? 'bar' : dashboard.currentView.value,
+const view = computed<DashboardView>({
+  get: () => dashboard.currentView.value,
   set: (value) => dashboard.switchView(value),
 })
 const activeFilter = ref('all')
@@ -118,16 +146,19 @@ const apiEndpoints = [
   ...bases.map((value, index) => ({ label: bases.length > 1 ? `站点 ${index + 1}` : '当前站点', value })),
 ]
 const apiEndpoint = ref(bases.length > 1 ? 'all' : bases[0]!)
+const selectedApiIndex = computed(() => Math.max(0, bases.indexOf(apiEndpoint.value)))
+const adminHref = computed(() => `#/admin?api=${apiEndpoint.value === 'all' ? 0 : selectedApiIndex.value}`)
 const servers = computed(() => dashboard.servers.value
   .filter((server) => apiEndpoint.value === 'all' || !server.source || server.source === apiEndpoint.value)
-  .map((server) => toDisplayServer(server, dashboard.now.value, server.source ? bases.indexOf(server.source) : 0)))
+  .map((server) => toDisplayServer(server, dashboard.now.value, server.source ? Math.max(0, bases.indexOf(server.source)) : 0)))
 
 const onlineCount = computed(() => servers.value.filter((server) => server.status === 'online').length)
 const offlineCount = computed(() => servers.value.length - onlineCount.value)
 const averageCpu = computed(() => Math.round(servers.value.filter((server) => server.status === 'online').reduce((total, server) => total + server.cpu, 0) / Math.max(onlineCount.value, 1)))
 const scopedRawServers = computed(() => dashboard.servers.value.filter((server) => apiEndpoint.value === 'all' || !server.source || server.source === apiEndpoint.value))
-const downloadRate = computed(() => scopedRawServers.value.reduce((total, server) => total + Number(server.net_in_speed || 0), 0) / 1024 ** 2)
-const uploadRate = computed(() => scopedRawServers.value.reduce((total, server) => total + Number(server.net_out_speed || 0), 0) / 1024 ** 2)
+const onlineRawServers = computed(() => scopedRawServers.value.filter((server) => isServerOnline(server, dashboard.now.value)))
+const downloadRate = computed(() => onlineRawServers.value.reduce((total, server) => total + Number(server.net_in_speed || 0), 0) / 1024 ** 2)
+const uploadRate = computed(() => onlineRawServers.value.reduce((total, server) => total + Number(server.net_out_speed || 0), 0) / 1024 ** 2)
 const downloadTotal = computed(() => formatBytes(scopedRawServers.value.reduce((total, server) => total + Number(server.net_rx || 0), 0)))
 const uploadTotal = computed(() => formatBytes(scopedRawServers.value.reduce((total, server) => total + Number(server.net_tx || 0), 0)))
 const filters = computed<Array<{ label: string; value: string; count: number; flag?: string }>>(() => [
@@ -148,19 +179,53 @@ const filteredServers = computed(() => {
     return filterMatches && queryMatches
   })
 })
+const hasActiveFilters = computed(() => activeFilter.value !== 'all' || Boolean(query.value.trim()))
+const emptyDescription = computed(() => dashboard.error.value
+  ? '监控数据不可用'
+  : servers.value.length ? '没有符合条件的节点' : '暂未添加监控节点')
 
-const tableColumns = [
+const groupedFilteredServers = computed(() => {
+  const groups = new Map<string, MockServer[]>()
+  for (const server of filteredServers.value) {
+    const name = server.group || 'Default'
+    const values = groups.get(name) || []
+    values.push(server)
+    groups.set(name, values)
+  }
+  return Array.from(groups, ([name, groupServers]) => ({ name, servers: groupServers }))
+})
+const mapRegions = computed(() => filteredServers.value.reduce<Record<string, number>>((regions, server) => {
+  regions[server.region] = (regions[server.region] || 0) + 1
+  return regions
+}, {}))
+
+type DisplaySetting = 'show_price' | 'show_expire' | 'show_tf' | 'show_time'
+function serverConfig(server: Pick<MockServer, 'apiIndex'>) {
+  const baseUrl = bases[server.apiIndex ?? 0]
+  return baseUrl ? dashboard.siteConfigs.value[baseUrl] ?? dashboard.sysConfig.value : dashboard.sysConfig.value
+}
+function hasVisibleSetting(setting: DisplaySetting) {
+  if (filteredServers.value.length) return filteredServers.value.some((server) => serverConfig(server)[setting])
+  if (apiEndpoint.value !== 'all') return (dashboard.siteConfigs.value[apiEndpoint.value] ?? dashboard.sysConfig.value)[setting]
+  return dashboard.sysConfig.value[setting]
+}
+
+const tableColumns = computed(() => [
   { title: '节点', key: 'name', width: 220 },
   { title: '资源使用率', key: 'usage', width: 260 },
   { title: '实时网络', key: 'network', width: 210 },
+  ...((hasVisibleSetting('show_price') || hasVisibleSetting('show_expire'))
+    ? [{ title: '费用 / 到期', key: 'billing', width: 150 }]
+    : []),
+  ...(hasVisibleSetting('show_tf') ? [{ title: '月流量', key: 'traffic', width: 140 }] : []),
   { title: '延迟', key: 'latency', width: 90 },
+  ...(hasVisibleSetting('show_time') ? [{ title: '数据时间', key: 'updated', width: 180 }] : []),
   { title: '状态', key: 'status', width: 90 },
-]
+])
 
 function clearFilters() { activeFilter.value = 'all'; query.value = '' }
-function openDetail(id: string) {
-  const server = servers.value.find((item) => item.id === id)
-  void router.push({ path: `/server/${id}`, query: server?.apiIndex ? { api: server.apiIndex } : {} })
+function openDetail(server: MockServer) {
+  void router.push({ path: `/server/${server.id}`, query: server.apiIndex ? { api: server.apiIndex } : {} })
 }
 function detailHref(value: Record<string, unknown>) {
   const id = encodeURIComponent(String(value.id || ''))
@@ -168,14 +233,24 @@ function detailHref(value: Record<string, unknown>) {
   return `#/server/${id}${index ? `?api=${index}` : ''}`
 }
 function metricColor(value: number) { return value >= 85 ? '#dc2626' : value >= 65 ? '#d48806' : '#16a34a' }
+function tableRowKey(server: MockServer) { return `${server.apiIndex || 0}-${server.id}` }
+function ringMeta(server: MockServer) {
+  const config = serverConfig(server)
+  return [
+    config.show_price ? server.priceText : '',
+    config.show_expire && server.expireDate ? `到期 ${server.expireDate}` : '',
+  ].filter(Boolean)
+}
 
 function updateToolbarLayout() {
   const toolbar = toolbarRef.value
   const buttons = toolbar?.querySelectorAll<HTMLElement>('.filter-group .ant-radio-button-wrapper')
+  const controls = toolbar?.querySelector<HTMLElement>('.toolbar-controls')
   if (!toolbar || !buttons?.length) return
   const filterContentWidth = [...buttons].reduce((width, button) => width + button.getBoundingClientRect().width, 0) - buttons.length + 1
+  const requiredWidth = Math.ceil(filterContentWidth + (controls?.getBoundingClientRect().width || 0) + 16)
   isToolbarStacked.value = window.matchMedia('(max-width: 640px)').matches
-    || toolbar.clientWidth <= Math.ceil(filterContentWidth)
+    || toolbar.clientWidth < requiredWidth
 }
 
 onMounted(() => {

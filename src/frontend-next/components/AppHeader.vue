@@ -1,10 +1,10 @@
 <template>
   <header class="app-header">
     <div class="app-header-inner">
-      <a class="app-header-brand" href="#/" aria-label="EdgeProbe 监控页">
+      <a class="app-header-brand" href="#/" :aria-label="`${title} 监控页`">
         <span class="brand-mark"><img src="/cloudflare-mark.svg" alt="" /></span>
         <span class="brand-copy">
-          <strong>EdgeProbe</strong>
+          <strong>{{ title }}</strong>
           <small>{{ subtitle }}</small>
         </span>
       </a>
@@ -27,10 +27,13 @@ import AButton from 'ant-design-vue/es/button'
 import ATooltip from 'ant-design-vue/es/tooltip'
 import { BulbOutlined } from '@ant-design/icons-vue'
 
-defineProps<{
+withDefaults(defineProps<{
   isDark: boolean
   subtitle: string
-}>()
+  title?: string
+}>(), {
+  title: 'EdgeProbe',
+})
 
 defineEmits<{ 'toggle-theme': [] }>()
 </script>

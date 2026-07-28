@@ -19,9 +19,10 @@ export interface TurnstileSite {
 
 export interface TurnstileWidgetOptions {
   sitekey: string
+  action?: string
   callback?: (token: string) => void
-  errorCallback?: () => void
-  expiredCallback?: () => void
+  'error-callback'?: (errorCode?: string) => void
+  'expired-callback'?: () => void
 }
 
 export interface TurnstileApi {
@@ -74,6 +75,14 @@ export function hasTurnstileSiteKeyMismatch(sites: readonly TurnstileSite[]): bo
   return sites.some((site) => !site.siteKey) || keys.size > 1
 }
 
+export const getNextTurnstileSite = (sites: readonly TurnstileSite[]): TurnstileSite | undefined =>
+  sites.find((site) => !site.verified)
+
+export const requiresFreshLoginTurnstileToken = (
+  globalEnabled: unknown,
+  loginEnabled: unknown,
+): boolean => isTurnstileValueEnabled(globalEnabled) || isTurnstileValueEnabled(loginEnabled)
+
 export async function fetchAllTurnstileConfigs(): Promise<ApiResult<TurnstileConfig>[]> {
   let results = await http.getAll<TurnstileConfig>('/api/config', {
     includeAuth: true,
@@ -107,9 +116,17 @@ export function loadTurnstileScript(): Promise<void> {
     const script = document.createElement('script')
     script.src = TURNSTILE_SCRIPT_SRC
     script.async = true
-    script.onload = () => resolve()
+    script.onload = () => {
+      if (window.turnstile) resolve()
+      else {
+        turnstileScriptPromise = null
+        script.remove()
+        reject(new Error('Turnstile 脚本加载失败'))
+      }
+    }
     script.onerror = (error) => {
       turnstileScriptPromise = null
+      script.remove()
       reject(error)
     }
     document.head.appendChild(script)

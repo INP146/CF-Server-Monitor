@@ -13,8 +13,10 @@
         <svg viewBox="0 0 320 92" preserveAspectRatio="none" role="img" :aria-label="`${title}趋势图`">
           <line v-for="y in [10, 46, 82]" :key="y" x1="0" :y1="y" x2="320" :y2="y" class="chart-grid-line" />
           <template v-for="item in plottedSeries" :key="item.label">
-            <polygon v-if="item.fill" :points="item.areaPoints" :fill="`${item.color}0D`" />
-            <polyline :points="item.linePoints" fill="none" :stroke="item.color" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+            <template v-for="(segment, index) in item.segments" :key="`${item.label}-${index}`">
+              <polygon v-if="item.fill && segment.areaPoints" :points="segment.areaPoints" :fill="`${item.color}0D`" />
+              <polyline :points="segment.linePoints" fill="none" :stroke="item.color" stroke-width="1.5" vector-effect="non-scaling-stroke" />
+            </template>
           </template>
         </svg>
       </div>
@@ -28,14 +30,14 @@ import { computed } from 'vue'
 
 interface ChartSeries {
   label: string
-  values: number[]
+  points: Array<{ timestamp: number; value: number | null }>
   color: string
   fill?: boolean
 }
 
 const props = withDefaults(defineProps<{
   title: string
-  values?: number[]
+  values?: Array<number | null>
   color?: string
   unit?: string
   series?: ChartSeries[]
@@ -48,13 +50,25 @@ const props = withDefaults(defineProps<{
 
 const displaySeries = computed<ChartSeries[]>(() => props.series.length ? props.series : [{
   label: props.title,
-  values: props.values,
+  points: props.values.map((value, index) => ({ timestamp: index, value })),
   color: props.color,
   fill: true,
 }])
 
-const allValues = computed(() => displaySeries.value.flatMap((item) => item.values).filter(Number.isFinite))
+const allValues = computed(() => displaySeries.value
+  .flatMap((item) => item.points.map((point) => point.value))
+  .filter((value): value is number => typeof value === 'number' && Number.isFinite(value)))
 const hasValues = computed(() => allValues.value.length > 0)
+const timestampRange = computed(() => {
+  const timestamps = displaySeries.value
+    .flatMap((item) => item.points.map((point) => point.timestamp))
+    .filter(Number.isFinite)
+  if (!timestamps.length) return { min: 0, max: 0 }
+  return {
+    min: Math.min(...timestamps),
+    max: Math.max(...timestamps),
+  }
+})
 
 function niceCeiling(value: number) {
   const safeValue = Math.max(value, 0.1)
@@ -77,16 +91,35 @@ function formatTick(value: number) {
 const tickLabels = computed(() => [scaleMax.value, scaleMax.value / 2, 0].map(formatTick))
 
 const plottedSeries = computed(() => displaySeries.value.map((series) => {
-  const points = series.values.map((value, index) => ({
-    x: series.values.length === 1 ? 160 : index / (series.values.length - 1) * 320,
-    y: 82 - Math.max(0, value) / scaleMax.value * 72,
-  }))
-  const linePoints = points.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const duration = timestampRange.value.max - timestampRange.value.min
+  const segments: Array<Array<{ x: number; y: number }>> = []
+  let current: Array<{ x: number; y: number }> = []
+
+  for (const point of series.points) {
+    if (point.value === null || !Number.isFinite(point.value) || !Number.isFinite(point.timestamp)) {
+      if (current.length) segments.push(current)
+      current = []
+      continue
+    }
+    current.push({
+      x: duration > 0 ? (point.timestamp - timestampRange.value.min) / duration * 320 : 160,
+      y: 82 - Math.max(0, point.value) / scaleMax.value * 72,
+    })
+  }
+  if (current.length) segments.push(current)
+
   return {
     ...series,
     fill: series.fill !== false,
-    linePoints,
-    areaPoints: `0,82 ${linePoints} 320,82`,
+    segments: segments.map((points) => {
+      const linePoints = points.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+      return {
+        linePoints,
+        areaPoints: points.length > 1
+          ? `${points[0]!.x.toFixed(1)},82 ${linePoints} ${points.at(-1)!.x.toFixed(1)},82`
+          : '',
+      }
+    }),
   }
 }))
 </script>
