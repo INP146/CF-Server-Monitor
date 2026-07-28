@@ -16,7 +16,7 @@
       <a-card class="login-card">
         <div class="login-heading">
           <h1 id="login-title">登录管理后台</h1>
-          <p>使用管理员凭据继续</p>
+          <p>选择管理站点并输入管理员密码</p>
         </div>
 
         <a-form
@@ -26,16 +26,12 @@
           required-mark="optional"
           @finish="submitLogin"
         >
-          <a-form-item label="用户名" name="username">
-            <a-input
-              v-model:value="formState.username"
-              size="large"
-              name="username"
-              autocomplete="username"
-              placeholder="admin"
-            >
-              <template #prefix><UserOutlined /></template>
-            </a-input>
+          <a-form-item label="管理站点" name="apiEndpoint">
+            <a-select v-model:value="formState.apiEndpoint" size="large">
+              <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">
+                {{ endpoint.label }} · {{ endpoint.value }}
+              </a-select-option>
+            </a-select>
           </a-form-item>
 
           <a-form-item label="密码" name="password">
@@ -51,7 +47,7 @@
           </a-form-item>
 
           <div class="login-options">
-            <a-checkbox v-model:checked="formState.remember">记住登录状态</a-checkbox>
+            <a-checkbox v-model:checked="formState.turnstileVerified">安全验证已通过</a-checkbox>
           </div>
 
           <a-button type="primary" size="large" html-type="submit" block :loading="submitting">
@@ -71,27 +67,28 @@ import ACard from 'ant-design-vue/es/card'
 import ACheckbox from 'ant-design-vue/es/checkbox'
 import AForm, { FormItem as AFormItem, type Rule } from 'ant-design-vue/es/form'
 import AInput, { InputPassword as AInputPassword } from 'ant-design-vue/es/input'
+import ASelect, { SelectOption as ASelectOption } from 'ant-design-vue/es/select'
 import ATooltip from 'ant-design-vue/es/tooltip'
 import {
   ArrowLeftOutlined,
   BulbOutlined,
   LockOutlined,
   LoginOutlined,
-  UserOutlined,
 } from '@ant-design/icons-vue'
+import { apiEndpoints } from '../data/admin'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
 
 const submitting = ref(false)
 const formState = reactive({
-  username: '',
+  apiEndpoint: apiEndpoints[0]!.value,
   password: '',
-  remember: true,
+  turnstileVerified: true,
 })
 
 const rules: Record<string, Rule[]> = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  apiEndpoint: [{ required: true, message: '请选择管理站点', trigger: 'change' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
@@ -100,6 +97,8 @@ async function submitLogin() {
   submitting.value = true
   await new Promise((resolve) => window.setTimeout(resolve, 650))
   submitting.value = false
-  window.location.hash = '#/admin/panel'
+  window.sessionStorage.setItem('edgeprobe-admin', 'true')
+  const params = new URLSearchParams(window.location.hash.split('?')[1] ?? '')
+  window.location.hash = `#${params.get('redirect') || '/admin/panel'}`
 }
 </script>

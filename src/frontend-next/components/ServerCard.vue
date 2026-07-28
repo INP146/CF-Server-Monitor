@@ -1,5 +1,13 @@
 <template>
-  <a-card class="server-card" :class="{ offline: server.status === 'offline', 'is-list': listView }" hoverable>
+  <a-card
+    class="server-card"
+    :class="{ offline: server.status === 'offline', 'is-list': listView }"
+    hoverable
+    tabindex="0"
+    role="link"
+    @click="openDetail"
+    @keydown.enter="openDetail"
+  >
     <template #title>
       <div class="server-card-title">
         <img :src="`/flags/${server.region}.svg`" alt="" />
@@ -15,7 +23,7 @@
           :status="server.status === 'online' ? 'success' : 'error'"
           :text="server.status === 'online' ? '在线' : '离线'"
         />
-        <a-button type="text" size="small" aria-label="打开节点详情">
+        <a-button type="text" size="small" aria-label="打开节点详情" @click.stop="openDetail">
           <template #icon><RightOutlined /></template>
         </a-button>
       </div>
@@ -73,6 +81,7 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import AButton from 'ant-design-vue/es/button'
 import ABadge from 'ant-design-vue/es/badge'
 import ACard from 'ant-design-vue/es/card'
@@ -97,6 +106,8 @@ const props = withDefaults(defineProps<{
   listView: false,
 })
 
+const router = useRouter()
+
 const metrics = computed(() => [
   { label: 'CPU', value: props.server.cpu },
   { label: '内存', value: props.server.memory },
@@ -113,5 +124,9 @@ function metricColor(value: number): string {
   if (value >= 85) return '#dc2626'
   if (value >= 65) return '#eab308'
   return '#16a34a'
+}
+
+function openDetail() {
+  void router.push(`/server/${props.server.id}`)
 }
 </script>

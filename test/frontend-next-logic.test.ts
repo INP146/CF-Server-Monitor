@@ -16,6 +16,14 @@ import {
 } from '../src/frontend-next/utils/server'
 import { calcTrafficUsagePercent, formatUptime, getPingColor } from '../src/frontend-next/utils/server-card'
 import { normalizeTimestamp } from '../src/frontend-next/utils/time'
+import { createManagedServers } from '../src/frontend-next/data/admin'
+import {
+  buildInstallCommand,
+  buildUninstallCommand,
+  createMetricSeries,
+  parseServerBackup,
+  serializeServers,
+} from '../src/frontend-next/utils/mock-admin'
 
 test('normalizes legacy display mode values', () => {
   assert.equal(normalizeDisplayMode('list'), 'table')
@@ -129,4 +137,24 @@ test('validates ping nodes and derives card metrics', () => {
   }), 50)
   assert.equal(formatUptime(Date.UTC(2026, 0, 1), Date.UTC(2026, 0, 2, 2), 'en'), '1d 2h')
   assert.equal(getPingColor(150), 'var(--accent-yellow)')
+})
+
+test('builds platform-specific mock agent commands', () => {
+  const server = createManagedServers()[0]!
+  assert.match(buildInstallCommand(server, 'linux'), /install\.sh.*--id lax-core-01/)
+  assert.match(buildInstallCommand(server, 'windows'), /Install-EdgeProbe.*--collect 3/)
+  assert.match(buildUninstallCommand(server, 'openwrt'), /opkg remove edgeprobe/)
+})
+
+test('round-trips server backup data and rejects non-array payloads', () => {
+  const servers = createManagedServers().slice(0, 2)
+  assert.deepEqual(parseServerBackup(serializeServers(servers)), servers)
+  assert.throws(() => parseServerBackup('{"id":"invalid"}'), /服务器数组/)
+})
+
+test('creates stable bounded metric samples for static charts', () => {
+  const samples = createMetricSeries(2, 25, 5, 12)
+  assert.equal(samples.length, 12)
+  assert.ok(samples.every((value) => value >= 0))
+  assert.deepEqual(samples, createMetricSeries(2, 25, 5, 12))
 })

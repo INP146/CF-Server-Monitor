@@ -17,8 +17,21 @@ const router = createRouter({
       path: '/admin/panel',
       name: 'admin',
       component: () => import('../views/AdminView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/server/:id',
+      name: 'server-detail',
+      component: () => import('../views/ServerDetailView.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  if (to.meta.requiresAuth && window.sessionStorage.getItem('edgeprobe-admin') !== 'true') {
+    return { name: 'login', query: { redirect: to.fullPath } }
+  }
+  return true
 })
 
 export default router
