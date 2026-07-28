@@ -1,27 +1,9 @@
 <template>
   <div class="detail-page" :class="{ 'is-dark': isDark }">
-    <header class="topbar">
-      <div class="topbar-inner">
-        <div class="detail-header-left">
-          <a-button type="text" href="#/">
-            <template #icon><ArrowLeftOutlined /></template>
-            返回监控页
-          </a-button>
-          <div v-if="server" class="detail-breadcrumb">
-            <img :src="`/flags/${server.region}.svg`" alt="" />
-            <strong>{{ server.name }}</strong>
-          </div>
-        </div>
-        <div class="topbar-actions">
-          <a-button type="text" href="#/admin"><template #icon><SettingOutlined /></template>后台</a-button>
-          <a-tooltip :title="isDark ? '切换到浅色主题' : '切换到深色主题'">
-            <a-button type="text" shape="circle" aria-label="切换主题" @click="$emit('toggle-theme')">
-              <template #icon><BulbOutlined /></template>
-            </a-button>
-          </a-tooltip>
-        </div>
-      </div>
-    </header>
+    <AppHeader subtitle="SERVER DETAILS" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
+      <a-button type="text" href="#/"><template #icon><ArrowLeftOutlined /></template>返回监控页</a-button>
+      <a-button type="text" href="#/admin"><template #icon><SettingOutlined /></template>管理后台</a-button>
+    </AppHeader>
 
     <main v-if="server" class="detail-content">
       <section class="detail-title-row">
@@ -85,9 +67,9 @@ import ACard from 'ant-design-vue/es/card'
 import AModal from 'ant-design-vue/es/modal'
 import AResult from 'ant-design-vue/es/result'
 import ASegmented from 'ant-design-vue/es/segmented'
-import ATooltip from 'ant-design-vue/es/tooltip'
-import { ArrowLeftOutlined, BulbOutlined, SettingOutlined } from '@ant-design/icons-vue'
+import { ArrowLeftOutlined, SettingOutlined } from '@ant-design/icons-vue'
 
+import AppHeader from '../components/AppHeader.vue'
 import MetricChart from '../components/MetricChart.vue'
 import { dashboardServers } from '../data/dashboard'
 import { createMetricSeries } from '../utils/mock-admin'

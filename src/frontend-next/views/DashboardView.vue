@@ -1,23 +1,12 @@
 <template>
   <div class="app-shell" :class="{ 'is-dark': isDark }">
     <main class="dashboard-main">
-      <header class="topbar">
-        <div class="topbar-inner">
-          <div class="topbar-brand">
-            <span class="brand-mark"><img src="/cloudflare-mark.svg" alt="" /></span>
-            <span class="brand-copy"><strong>EdgeProbe</strong><small>SERVER MONITOR</small></span>
-          </div>
-          <div class="topbar-actions">
-            <a-select v-model:value="apiEndpoint" class="header-site-select" aria-label="监控站点">
-              <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option>
-            </a-select>
-            <a-button type="text" href="#/admin"><template #icon><SettingOutlined /></template>管理后台</a-button>
-            <a-tooltip :title="isDark ? '切换到浅色主题' : '切换到深色主题'">
-              <a-button type="text" shape="circle" aria-label="切换主题" @click="$emit('toggle-theme')"><template #icon><BulbOutlined /></template></a-button>
-            </a-tooltip>
-          </div>
-        </div>
-      </header>
+      <AppHeader subtitle="SERVER MONITOR" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
+        <a-select v-model:value="apiEndpoint" class="header-site-select" aria-label="监控站点">
+          <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option>
+        </a-select>
+        <a-button type="text" href="#/admin"><template #icon><SettingOutlined /></template>管理后台</a-button>
+      </AppHeader>
 
       <div class="dashboard-content">
         <section class="summary-grid" aria-label="监控摘要">
@@ -90,9 +79,9 @@ import { RadioButton as ARadioButton, RadioGroup as ARadioGroup } from 'ant-desi
 import ASelect, { SelectOption as ASelectOption } from 'ant-design-vue/es/select'
 import AStatistic from 'ant-design-vue/es/statistic'
 import ATable from 'ant-design-vue/es/table'
-import ATooltip from 'ant-design-vue/es/tooltip'
-import { AppstoreOutlined, BulbOutlined, CloudServerOutlined, DownloadOutlined, LineChartOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined, UploadOutlined } from '@ant-design/icons-vue'
+import { AppstoreOutlined, CloudServerOutlined, DownloadOutlined, LineChartOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined, UploadOutlined } from '@ant-design/icons-vue'
 
+import AppHeader from '../components/AppHeader.vue'
 import ServerCard from '../components/ServerCard.vue'
 import { apiEndpoints } from '../data/admin'
 import { dashboardServers } from '../data/dashboard'

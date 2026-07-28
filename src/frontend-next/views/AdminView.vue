@@ -1,16 +1,10 @@
 <template>
   <div class="admin-page" :class="{ 'is-dark': isDark }">
-    <header class="admin-header">
-      <div class="admin-header-inner">
-        <div class="topbar-brand"><span class="brand-mark"><img src="/cloudflare-mark.svg" alt="" /></span><span class="brand-copy"><strong>EdgeProbe</strong><small>ADMIN CONSOLE</small></span></div>
-        <div class="admin-header-actions">
-          <a-select v-model:value="apiEndpoint" class="header-site-select" aria-label="管理站点"><a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option></a-select>
-          <a-button type="text" href="#/"><template #icon><HomeOutlined /></template>监控页</a-button>
-          <a-tooltip :title="isDark ? '切换到浅色主题' : '切换到深色主题'"><a-button type="text" shape="circle" aria-label="切换主题" @click="$emit('toggle-theme')"><template #icon><BulbOutlined /></template></a-button></a-tooltip>
-          <a-button type="text" danger @click="logout"><template #icon><LogoutOutlined /></template>退出</a-button>
-        </div>
-      </div>
-    </header>
+    <AppHeader subtitle="ADMIN CONSOLE" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
+      <a-select v-model:value="apiEndpoint" class="header-site-select" aria-label="管理站点"><a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option></a-select>
+      <a-button type="text" href="#/"><template #icon><HomeOutlined /></template>监控页</a-button>
+      <template #end><a-button type="text" danger @click="logout"><template #icon><LogoutOutlined /></template>退出</a-button></template>
+    </AppHeader>
 
     <main class="admin-content">
       <section class="admin-summary-grid">
@@ -110,8 +104,9 @@ import ATable from 'ant-design-vue/es/table'
 import ATag from 'ant-design-vue/es/tag'
 import ATabs, { TabPane as ATabPane } from 'ant-design-vue/es/tabs'
 import ATooltip from 'ant-design-vue/es/tooltip'
-import { ArrowDownOutlined, ArrowUpOutlined, BulbOutlined, CheckCircleOutlined, CodeOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, ExportOutlined, HomeOutlined, ImportOutlined, LineChartOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined, SendOutlined } from '@ant-design/icons-vue'
+import { ArrowDownOutlined, ArrowUpOutlined, CheckCircleOutlined, CodeOutlined, DatabaseOutlined, DeleteOutlined, EditOutlined, ExportOutlined, HomeOutlined, ImportOutlined, LineChartOutlined, LogoutOutlined, PlusOutlined, ReloadOutlined, SaveOutlined, SearchOutlined, SendOutlined } from '@ant-design/icons-vue'
 
+import AppHeader from '../components/AppHeader.vue'
 import CommandPreviewModal from '../components/CommandPreviewModal.vue'
 import ServerDeleteModal from '../components/ServerDeleteModal.vue'
 import ServerEditorModal from '../components/ServerEditorModal.vue'

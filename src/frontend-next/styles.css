@@ -66,7 +66,7 @@ a.ant-btn:active {
   min-width: 0;
 }
 
-.topbar {
+.app-header {
   height: 64px;
   position: sticky;
   top: 0;
@@ -76,7 +76,7 @@ a.ant-btn:active {
   backdrop-filter: blur(12px);
 }
 
-.topbar-inner {
+.app-header-inner {
   width: min(100%, 1440px);
   height: 100%;
   margin: 0 auto;
@@ -86,10 +86,13 @@ a.ant-btn:active {
   justify-content: space-between;
 }
 
-.topbar-brand {
+.app-header-brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
 }
 
 .brand-mark {
@@ -125,10 +128,10 @@ a.ant-btn:active {
   letter-spacing: 1.3px;
 }
 
-.topbar-actions {
+.app-header-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 .dashboard-content {
@@ -512,20 +515,9 @@ a.ant-btn:active {
   background: var(--layout-bg);
 }
 
-.login-topbar {
-  width: 100%;
-  height: 64px;
-  padding: 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: absolute;
-  inset: 0 0 auto;
-}
-
 .login-panel {
-  min-height: 100vh;
-  padding: 84px 24px 40px;
+  min-height: calc(100vh - 64px);
+  padding: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -572,27 +564,6 @@ a.ant-btn:active {
   background: var(--layout-bg);
 }
 
-.admin-header {
-  height: 64px;
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  border-bottom: 1px solid var(--border);
-  background: var(--header-bg);
-  backdrop-filter: blur(12px);
-}
-
-.admin-header-inner {
-  width: min(100%, 1440px);
-  height: 100%;
-  margin: 0 auto;
-  padding: 0 28px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.admin-header-actions,
 .admin-toolbar,
 .admin-filters,
 .admin-toolbar-actions,
@@ -603,7 +574,6 @@ a.ant-btn:active {
   align-items: center;
 }
 
-.admin-header-actions,
 .admin-toolbar-actions,
 .table-actions,
 .database-actions {
@@ -791,25 +761,10 @@ a.ant-btn:active {
   padding: 28px;
 }
 
-.detail-header-left,
-.detail-breadcrumb,
 .detail-title-line,
 .chart-title-row {
   display: flex;
   align-items: center;
-}
-
-.detail-header-left {
-  gap: 18px;
-}
-
-.detail-breadcrumb {
-  gap: 8px;
-}
-
-.detail-breadcrumb img {
-  width: 22px;
-  max-height: 16px;
 }
 
 .detail-title-row {
@@ -1236,11 +1191,11 @@ a.ant-btn:active {
 }
 
 @media (max-width: 640px) {
-  .topbar {
+  .app-header {
     height: 58px;
   }
 
-  .topbar-inner,
+  .app-header-inner,
   .dashboard-content {
     padding-right: 16px;
     padding-left: 16px;
@@ -1255,10 +1210,18 @@ a.ant-btn:active {
     display: none;
   }
 
-  .topbar-actions .ant-btn:first-child {
+  .app-header-actions {
+    gap: 2px;
+  }
+
+  .app-header-actions .ant-btn {
     width: 34px;
     padding-inline: 0;
     font-size: 0;
+  }
+
+  .app-header-actions .ant-btn .anticon {
+    font-size: 14px;
   }
 
   .header-site-select {
@@ -1310,24 +1273,15 @@ a.ant-btn:active {
     padding-left: 16px;
   }
 
-  .login-topbar {
-    height: 58px;
-    padding: 0 12px;
-  }
-
   .login-panel {
-    padding: 74px 16px 28px;
+    min-height: calc(100vh - 58px);
+    padding: 24px 16px 28px;
   }
 
   .login-card .ant-card-body {
     padding: 24px;
   }
 
-  .admin-header {
-    height: 58px;
-  }
-
-  .admin-header-inner,
   .admin-content {
     padding-right: 16px;
     padding-left: 16px;
@@ -1335,10 +1289,6 @@ a.ant-btn:active {
 
   .admin-content {
     padding-top: 12px;
-  }
-
-  .admin-header-actions .ant-btn span:not(.anticon) {
-    display: none;
   }
 
   .admin-filters {
@@ -1367,21 +1317,6 @@ a.ant-btn:active {
 
   .detail-content {
     padding: 20px 16px;
-  }
-
-  .detail-header-left {
-    gap: 2px;
-  }
-
-  .detail-breadcrumb img {
-    display: none;
-  }
-
-  .detail-breadcrumb strong {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .detail-summary-grid,

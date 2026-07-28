@@ -1,16 +1,11 @@
 <template>
   <main class="login-page" :class="{ 'is-dark': isDark }">
-    <div class="login-topbar">
+    <AppHeader subtitle="ADMIN LOGIN" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
       <a-button type="text" href="#/">
         <template #icon><ArrowLeftOutlined /></template>
         返回监控页
       </a-button>
-      <a-tooltip :title="isDark ? '切换到浅色主题' : '切换到深色主题'">
-        <a-button type="text" shape="circle" aria-label="切换主题" @click="$emit('toggle-theme')">
-          <template #icon><BulbOutlined /></template>
-        </a-button>
-      </a-tooltip>
-    </div>
+    </AppHeader>
 
     <section class="login-panel" aria-labelledby="login-title">
       <a-card class="login-card">
@@ -68,13 +63,12 @@ import ACheckbox from 'ant-design-vue/es/checkbox'
 import AForm, { FormItem as AFormItem, type Rule } from 'ant-design-vue/es/form'
 import AInput, { InputPassword as AInputPassword } from 'ant-design-vue/es/input'
 import ASelect, { SelectOption as ASelectOption } from 'ant-design-vue/es/select'
-import ATooltip from 'ant-design-vue/es/tooltip'
 import {
   ArrowLeftOutlined,
-  BulbOutlined,
   LockOutlined,
   LoginOutlined,
 } from '@ant-design/icons-vue'
+import AppHeader from '../components/AppHeader.vue'
 import { apiEndpoints } from '../data/admin'
 
 defineProps<{ isDark: boolean }>()
