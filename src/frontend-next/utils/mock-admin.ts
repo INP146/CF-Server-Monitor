@@ -18,18 +18,19 @@ const shellByOS: Record<TargetOS, string> = {
   windows: 'install.ps1',
 }
 
-export function buildInstallCommand(server: ManagedServer, targetOS: TargetOS): string {
-  const args = [
-    `--id ${server.id}`,
-    `--collect ${server.collectInterval}`,
-    `--report ${server.reportInterval}`,
-    `--reset-day ${server.resetDay}`,
-    server.autoUpdate ? '--auto-update' : '',
-  ].filter(Boolean).join(' ')
+export function buildInstallCommand(
+  server: ManagedServer,
+  targetOS: TargetOS,
+  apiBase = 'https://monitor.example.com',
+  apiSecret = '',
+): string {
+  const base = apiBase.replace(/\/+$/, '')
+  const args = `install -id=${server.id} -secret='${apiSecret}' -url=${base}/update`
   if (targetOS === 'windows') {
-    return `irm https://monitor.example.com/${shellByOS[targetOS]} | iex; Install-EdgeProbe ${args}`
+    return `irm ${base}/cf-server-monitor.ps1 -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 ${args}`
   }
-  return `curl -fsSL https://monitor.example.com/${shellByOS[targetOS]} | sh -s -- ${args}`
+  const shell = targetOS === 'alpine' || targetOS === 'openwrt' ? 'sh' : 'bash'
+  return `curl -sL ${base}/${shellByOS[targetOS]} | ${shell} -s ${args}`
 }
 
 export function buildUninstallCommand(server: ManagedServer, targetOS: TargetOS): string {

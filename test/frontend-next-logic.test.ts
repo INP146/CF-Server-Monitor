@@ -16,7 +16,12 @@ import {
 } from '../src/frontend-next/utils/server'
 import { calcTrafficUsagePercent, formatUptime, getPingColor } from '../src/frontend-next/utils/server-card'
 import { normalizeTimestamp } from '../src/frontend-next/utils/time'
-import { createManagedServers } from '../src/frontend-next/data/admin'
+import { createDefaultSettings, createManagedServers } from '../src/frontend-next/data/admin'
+import {
+  applyAdminSettings,
+  toAdminServerPayload,
+  toManagedServer,
+} from '../src/frontend-next/utils/admin-api'
 import {
   buildInstallCommand,
   buildUninstallCommand,
@@ -24,6 +29,7 @@ import {
   parseServerBackup,
   serializeServers,
 } from '../src/frontend-next/utils/mock-admin'
+import { toDisplayServer } from '../src/frontend-next/utils/view-model'
 
 test('normalizes legacy display mode values', () => {
   assert.equal(normalizeDisplayMode('list'), 'table')
@@ -139,11 +145,58 @@ test('validates ping nodes and derives card metrics', () => {
   assert.equal(getPingColor(150), 'var(--accent-yellow)')
 })
 
-test('builds platform-specific mock agent commands', () => {
+test('builds platform-specific agent commands with API credentials', () => {
   const server = createManagedServers()[0]!
-  assert.match(buildInstallCommand(server, 'linux'), /install\.sh.*--id lax-core-01/)
-  assert.match(buildInstallCommand(server, 'windows'), /Install-EdgeProbe.*--collect 3/)
+  assert.match(buildInstallCommand(server, 'linux', 'https://edge.example.com/', 'secret'), /install\.sh.*-id=lax-core-01.*-secret='secret'.*-url=https:\/\/edge\.example\.com\/update/)
+  assert.match(buildInstallCommand(server, 'windows', 'https://edge.example.com', 'secret'), /cf-server-monitor\.ps1.*-id=lax-core-01/)
   assert.match(buildUninstallCommand(server, 'openwrt'), /opkg remove edgeprobe/)
+})
+
+test('maps dashboard and admin API records into the new frontend models', () => {
+  const now = 1_700_000_000_000
+  const record = {
+    id: 'server-id',
+    name: 'Tokyo',
+    region: 'JP',
+    tags: 'Core,IPv6',
+    last_updated: now - 1_000,
+    is_online: true,
+    cpu: '24.4',
+    ram_used: 2,
+    ram_total: 4,
+    disk_used: 30,
+    disk_total: 100,
+    net_in_speed: 1024,
+    net_out_speed: 2048,
+    ping_ct: 42,
+    is_hidden: '1',
+    auto_update: '1',
+  }
+  const display = toDisplayServer(record, now)
+  assert.equal(display.status, 'online')
+  assert.equal(display.memory, 50)
+  assert.equal(display.download, '1 KB/s')
+
+  const managed = toManagedServer(record, now)
+  assert.equal(managed.enabled, false)
+  assert.equal(managed.autoUpdate, true)
+  assert.equal(toAdminServerPayload(managed).is_hidden, true)
+})
+
+test('maps backend settings without exposing write-only secrets', () => {
+  const settings = createDefaultSettings()
+  applyAdminSettings(settings, {
+    site_title: 'Fleet',
+    display_mode: 'table',
+    show_price: 'false',
+    turnstile_enabled: 'true',
+    cloudflare_account_id: 'account-id',
+  })
+  assert.equal(settings.siteTitle, 'Fleet')
+  assert.equal(settings.defaultView, 'table')
+  assert.equal(settings.showPrice, false)
+  assert.equal(settings.turnstileEnabled, true)
+  assert.equal(settings.cloudflareAccountId, 'account-id')
 })
 
 test('round-trips server backup data and rejects non-array payloads', () => {

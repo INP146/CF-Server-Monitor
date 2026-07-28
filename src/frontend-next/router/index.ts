@@ -1,4 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
+import { isAdminLoggedIn } from '../utils/api'
 
 const router = createRouter({
   history: createWebHashHistory(),
@@ -28,7 +29,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  if (to.meta.requiresAuth && window.sessionStorage.getItem('edgeprobe-admin') !== 'true') {
+  if (to.meta.requiresAuth && !isAdminLoggedIn()) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   return true

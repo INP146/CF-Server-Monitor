@@ -18,6 +18,7 @@ export interface MockServer {
   uptime: string
   load: string
   tags: string[]
+  apiIndex?: number
 }
 
 export const dashboardServers: MockServer[] = [

@@ -2,22 +2,24 @@
   <div class="app-shell" :class="{ 'is-dark': isDark }">
     <main class="dashboard-main">
       <AppHeader subtitle="SERVER MONITOR" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
-        <a-select v-model:value="apiEndpoint" class="header-site-select" aria-label="监控站点">
+        <a-select v-if="apiEndpoints.length > 1" v-model:value="apiEndpoint" class="header-site-select" aria-label="监控站点">
           <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option>
         </a-select>
         <a-button type="text" href="#/admin"><template #icon><SettingOutlined /></template>管理后台</a-button>
       </AppHeader>
 
       <div class="dashboard-content">
+        <a-alert v-if="dashboard.error.value" type="error" show-icon message="监控数据加载失败" :description="dashboard.error.value.message" />
+        <a-alert v-else-if="dashboard.corsErrorSites.value.length" type="warning" show-icon message="部分站点无法访问" :description="dashboard.corsErrorSites.value.join('、')" />
         <FleetSummary
           :total="servers.length"
           :online="onlineCount"
           :offline="offlineCount"
           :average-cpu="averageCpu"
-          :download-rate="3.84"
-          download-total="18.42 TB"
-          :upload-rate="1.27"
-          upload-total="7.96 TB"
+          :download-rate="downloadRate"
+          :download-total="downloadTotal"
+          :upload-rate="uploadRate"
+          :upload-total="uploadTotal"
         />
 
         <section class="fleet-section">
@@ -37,7 +39,9 @@
             </div>
           </div>
 
-          <div v-if="filteredServers.length && view === 'bar'" class="server-grid">
+          <div v-if="dashboard.isLoading.value" class="empty-result"><a-spin tip="正在加载监控数据" /></div>
+
+          <div v-else-if="filteredServers.length && view === 'bar'" class="server-grid">
             <ServerCard v-for="server in filteredServers" :key="server.id" :server="server" />
           </div>
 
@@ -55,7 +59,7 @@
 
           <a-table v-else-if="filteredServers.length" class="dashboard-table" :columns="tableColumns" :data-source="filteredServers" row-key="id" :pagination="false" :scroll="{ x: 820 }" size="middle">
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'name'"><a :href="`#/server/${record.id}`" class="table-server-link"><img :src="`/flags/${record.region}.svg`" alt="" /><span><strong>{{ record.name }}</strong><small>{{ record.location }}</small></span></a></template>
+              <template v-if="column.key === 'name'"><a :href="detailHref(record)" class="table-server-link"><img :src="`/flags/${record.region}.svg`" alt="" /><span><strong>{{ record.name }}</strong><small>{{ record.location }}</small></span></a></template>
               <template v-else-if="column.key === 'usage'"><div class="table-usage"><span>CPU {{ record.cpu }}%</span><span>内存 {{ record.memory }}%</span><span>磁盘 {{ record.disk }}%</span></div></template>
               <template v-else-if="column.key === 'network'"><span class="mono-text">↓ {{ record.download }} · ↑ {{ record.upload }}</span></template>
               <template v-else-if="column.key === 'latency'">{{ record.latency === null ? '超时' : `${record.latency} ms` }}</template>
@@ -76,49 +80,69 @@ import { useRouter } from 'vue-router'
 import AButton from 'ant-design-vue/es/button'
 import ABadge from 'ant-design-vue/es/badge'
 import ACard from 'ant-design-vue/es/card'
+import AAlert from 'ant-design-vue/es/alert'
 import AEmpty from 'ant-design-vue/es/empty'
 import AInput from 'ant-design-vue/es/input'
 import AProgress from 'ant-design-vue/es/progress'
 import { RadioButton as ARadioButton, RadioGroup as ARadioGroup } from 'ant-design-vue/es/radio'
 import ASelect, { SelectOption as ASelectOption } from 'ant-design-vue/es/select'
+import ASpin from 'ant-design-vue/es/spin'
 import ATable from 'ant-design-vue/es/table'
 import { AppstoreOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
 
 import AppHeader from '../components/AppHeader.vue'
 import FleetSummary from '../components/FleetSummary.vue'
 import ServerCard from '../components/ServerCard.vue'
-import { apiEndpoints } from '../data/admin'
-import { dashboardServers } from '../data/dashboard'
+import { useDashboard } from '../composables/useDashboard'
+import { formatBytes } from '../utils/format'
+import { getApiBases } from '../utils/config'
+import { toDisplayServer } from '../utils/view-model'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
 
 const router = useRouter()
+const dashboard = useDashboard()
 const toolbarRef = ref<HTMLElement | null>(null)
 const isToolbarStacked = ref(false)
 let toolbarResizeObserver: ResizeObserver | null = null
-const view = ref<'bar' | 'ring' | 'table'>('bar')
+const view = computed<'bar' | 'ring' | 'table'>({
+  get: () => dashboard.currentView.value === 'map' ? 'bar' : dashboard.currentView.value,
+  set: (value) => dashboard.switchView(value),
+})
 const activeFilter = ref('all')
 const query = ref('')
-const apiEndpoint = ref(apiEndpoints[0]!.value)
-const servers = dashboardServers
+const bases = getApiBases()
+const apiEndpoints = [
+  ...(bases.length > 1 ? [{ label: '全部站点', value: 'all' }] : []),
+  ...bases.map((value, index) => ({ label: bases.length > 1 ? `站点 ${index + 1}` : '当前站点', value })),
+]
+const apiEndpoint = ref(bases.length > 1 ? 'all' : bases[0]!)
+const servers = computed(() => dashboard.servers.value
+  .filter((server) => apiEndpoint.value === 'all' || !server.source || server.source === apiEndpoint.value)
+  .map((server) => toDisplayServer(server, dashboard.now.value, server.source ? bases.indexOf(server.source) : 0)))
 
-const onlineCount = computed(() => servers.filter((server) => server.status === 'online').length)
-const offlineCount = computed(() => servers.length - onlineCount.value)
-const averageCpu = computed(() => Math.round(servers.filter((server) => server.status === 'online').reduce((total, server) => total + server.cpu, 0) / onlineCount.value))
-const filters = computed(() => [
-  { label: '全部', value: 'all', count: servers.length },
+const onlineCount = computed(() => servers.value.filter((server) => server.status === 'online').length)
+const offlineCount = computed(() => servers.value.length - onlineCount.value)
+const averageCpu = computed(() => Math.round(servers.value.filter((server) => server.status === 'online').reduce((total, server) => total + server.cpu, 0) / Math.max(onlineCount.value, 1)))
+const scopedRawServers = computed(() => dashboard.servers.value.filter((server) => apiEndpoint.value === 'all' || !server.source || server.source === apiEndpoint.value))
+const downloadRate = computed(() => scopedRawServers.value.reduce((total, server) => total + Number(server.net_in_speed || 0), 0) / 1024 ** 2)
+const uploadRate = computed(() => scopedRawServers.value.reduce((total, server) => total + Number(server.net_out_speed || 0), 0) / 1024 ** 2)
+const downloadTotal = computed(() => formatBytes(scopedRawServers.value.reduce((total, server) => total + Number(server.net_rx || 0), 0)))
+const uploadTotal = computed(() => formatBytes(scopedRawServers.value.reduce((total, server) => total + Number(server.net_tx || 0), 0)))
+const filters = computed<Array<{ label: string; value: string; count: number; flag?: string }>>(() => [
+  { label: '全部', value: 'all', count: servers.value.length },
   { label: '在线', value: 'online', count: onlineCount.value },
   { label: '离线', value: 'offline', count: offlineCount.value },
-  { label: '美国', value: 'us', count: servers.filter((server) => server.region === 'us').length, flag: 'us' },
-  { label: '日本', value: 'jp', count: servers.filter((server) => server.region === 'jp').length, flag: 'jp' },
-  { label: '德国', value: 'de', count: servers.filter((server) => server.region === 'de').length, flag: 'de' },
-  { label: '新加坡', value: 'sg', count: servers.filter((server) => server.region === 'sg').length, flag: 'sg' },
+  ...Object.entries(servers.value.reduce<Record<string, number>>((counts, server) => {
+    counts[server.region] = (counts[server.region] || 0) + 1
+    return counts
+  }, {})).map(([region, count]) => ({ label: region.toUpperCase(), value: region, count, flag: region })),
 ])
 
 const filteredServers = computed(() => {
   const normalizedQuery = query.value.trim().toLowerCase()
-  return servers.filter((server) => {
+  return servers.value.filter((server) => {
     const filterMatches = activeFilter.value === 'all' || server.status === activeFilter.value || server.region === activeFilter.value
     const queryMatches = !normalizedQuery || `${server.name} ${server.location} ${server.ip} ${server.os} ${server.tags.join(' ')}`.toLowerCase().includes(normalizedQuery)
     return filterMatches && queryMatches
@@ -134,7 +158,15 @@ const tableColumns = [
 ]
 
 function clearFilters() { activeFilter.value = 'all'; query.value = '' }
-function openDetail(id: string) { void router.push(`/server/${id}`) }
+function openDetail(id: string) {
+  const server = servers.value.find((item) => item.id === id)
+  void router.push({ path: `/server/${id}`, query: server?.apiIndex ? { api: server.apiIndex } : {} })
+}
+function detailHref(value: Record<string, unknown>) {
+  const id = encodeURIComponent(String(value.id || ''))
+  const index = Number(value.apiIndex) || 0
+  return `#/server/${id}${index ? `?api=${index}` : ''}`
+}
 function metricColor(value: number) { return value >= 85 ? '#dc2626' : value >= 65 ? '#d48806' : '#16a34a' }
 
 function updateToolbarLayout() {
@@ -147,6 +179,7 @@ function updateToolbarLayout() {
 }
 
 onMounted(() => {
+  void dashboard.initialize()
   toolbarResizeObserver = new ResizeObserver(updateToolbarLayout)
   if (toolbarRef.value) toolbarResizeObserver.observe(toolbarRef.value)
   void document.fonts?.ready.then(updateToolbarLayout)

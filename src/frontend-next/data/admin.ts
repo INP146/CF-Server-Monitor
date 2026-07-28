@@ -52,10 +52,15 @@ export interface GlobalSettings {
   offlineNotifyMinutes: number
   turnstileSiteKey: string
   turnstileSecret: string
+  turnstileEnabled: boolean
+  turnstileLoginEnabled: boolean
   jwtSecret: string
+  adminUsername: string
+  isPublic: boolean
+  cloudflareAccountId: string
   cloudflareApiToken: string
+  cspStatic: string
   cspApi: string
-  cspWs: string
   adminPassword: string
   confirmPassword: string
 }
@@ -78,7 +83,7 @@ export const createManagedServers = (): ManagedServer[] => dashboardServers.map(
   trafficLimit: index % 2 === 0 ? 2048 : 1024,
   trafficCalcType: 'total',
   resetDay: 1,
-  collectInterval: 3,
+  collectInterval: 0,
   reportInterval: 60,
   customCt: '',
   customCu: '',
@@ -101,7 +106,7 @@ export const createDefaultSettings = (): GlobalSettings => ({
   showUpdateTime: true,
   showLongHistory: true,
   backgroundImage: '',
-  collectInterval: 3,
+  collectInterval: 0,
   reportInterval: 60,
   autoUpdate: false,
   trafficResetDay: 1,
@@ -114,16 +119,15 @@ export const createDefaultSettings = (): GlobalSettings => ({
   offlineNotifyMinutes: 5,
   turnstileSiteKey: '',
   turnstileSecret: '',
-  jwtSecret: 'mock-jwt-secret',
+  turnstileEnabled: false,
+  turnstileLoginEnabled: false,
+  jwtSecret: '',
+  adminUsername: 'admin',
+  isPublic: true,
+  cloudflareAccountId: '',
   cloudflareApiToken: '',
+  cspStatic: '',
   cspApi: '',
-  cspWs: '',
   adminPassword: '',
   confirmPassword: '',
 })
-
-export const apiEndpoints = [
-  { label: '主站', value: 'https://monitor.example.com' },
-  { label: '备用站', value: 'https://monitor-backup.example.com' },
-]
-

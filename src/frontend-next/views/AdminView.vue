@@ -1,7 +1,7 @@
 <template>
   <div class="admin-page" :class="{ 'is-dark': isDark }">
     <AppHeader subtitle="ADMIN CONSOLE" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
-      <a-select v-model:value="apiEndpoint" class="header-site-select" aria-label="管理站点"><a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option></a-select>
+      <a-select v-if="apiEndpoints.length > 1" v-model:value="apiEndpoint" class="header-site-select" aria-label="管理站点"><a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">{{ endpoint.label }}</a-select-option></a-select>
       <a-button type="text" href="#/"><template #icon><HomeOutlined /></template>监控页</a-button>
       <template #end><a-button type="text" danger @click="logout"><template #icon><LogoutOutlined /></template>退出</a-button></template>
     </AppHeader>
@@ -13,10 +13,10 @@
         :online="stats.online"
         :offline="stats.offline"
         :average-cpu="stats.averageCpu"
-        :download-rate="3.84"
-        download-total="18.42 TB"
-        :upload-rate="1.27"
-        upload-total="7.96 TB"
+        :download-rate="stats.downloadRate"
+        download-total="实时合计"
+        :upload-rate="stats.uploadRate"
+        upload-total="实时合计"
       />
 
       <a-alert v-if="feedback" :type="feedback.type" show-icon closable :message="feedback.message" class="admin-feedback" @close="feedback = null" />
@@ -35,7 +35,7 @@
             </div>
           </div>
 
-          <a-table class="admin-table" :columns="columns" :data-source="filteredServers" :row-selection="rowSelection" :pagination="{ pageSize: 8, hideOnSinglePage: true }" :scroll="{ x: 1540 }" row-key="id" size="middle">
+          <a-table class="admin-table" :columns="columns" :data-source="filteredServers" :row-selection="rowSelection" :pagination="{ pageSize: 8, hideOnSinglePage: true }" :scroll="{ x: 1540 }" :loading="refreshing" row-key="id" size="middle">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'sort'"><div class="sort-actions"><a-button type="text" size="small" aria-label="上移" @click="moveServer(record.id, -1)"><template #icon><ArrowUpOutlined /></template></a-button><a-button type="text" size="small" aria-label="下移" @click="moveServer(record.id, 1)"><template #icon><ArrowDownOutlined /></template></a-button></div></template>
               <template v-else-if="column.key === 'name'"><a :href="`#/server/${record.id}`" class="admin-server-name"><img :src="`/flags/${record.region}.svg`" alt="" /><span><strong>{{ record.name }}</strong><small>{{ record.id }}</small></span></a></template>
@@ -45,9 +45,9 @@
               <template v-else-if="column.key === 'billing'"><span>{{ record.currency }}{{ record.price.toFixed(2) }}/{{ billingLabel(record.billingCycle) }}</span></template>
               <template v-else-if="column.key === 'expire'"><span :class="{ 'text-danger': isExpiring(record.expireDate) }">{{ record.expireDate || '-' }}</span><small v-if="record.autoRenewal" class="cell-subtext">自动续费</small></template>
               <template v-else-if="column.key === 'traffic'">{{ record.trafficLimit ? `${record.trafficLimit} GB` : '不限' }}</template>
-              <template v-else-if="column.key === 'version'"><span :class="record.agentVersion === 'v1.2.4' ? 'text-success' : 'text-danger'">{{ record.agentVersion }}</span></template>
+              <template v-else-if="column.key === 'version'"><span>{{ record.agentVersion }}</span></template>
               <template v-else-if="column.key === 'status'"><a-badge :status="record.status === 'online' ? 'success' : 'error'" :text="record.status === 'online' ? '在线' : '离线'" /></template>
-              <template v-else-if="column.key === 'enabled'"><a-switch v-model:checked="record.enabled" size="small" /></template>
+              <template v-else-if="column.key === 'enabled'"><a-switch :checked="record.enabled" size="small" @change="toggleServerEnabled(record, Boolean($event))" /></template>
               <template v-else-if="column.key === 'actions'"><div class="table-actions"><a-tooltip title="安装命令"><a-button type="text" shape="circle" aria-label="安装命令" @click="openCommandModal(record)"><template #icon><CodeOutlined /></template></a-button></a-tooltip><a-tooltip title="编辑"><a-button type="text" shape="circle" aria-label="编辑" @click="openEditModal(record)"><template #icon><EditOutlined /></template></a-button></a-tooltip><a-tooltip title="删除"><a-button type="text" shape="circle" danger aria-label="删除" @click="openDeleteModal(record)"><template #icon><DeleteOutlined /></template></a-button></a-tooltip></div></template>
             </template>
           </a-table>
@@ -90,19 +90,6 @@
 
             <a-card title="采集与探测" class="settings-card">
               <a-form layout="vertical">
-                <div class="settings-form-grid settings-form-grid-three">
-                  <a-form-item label="默认采集间隔">
-                    <a-input-number v-model:value="settings.collectInterval" :min="0" :max="60" addon-after="秒" />
-                  </a-form-item>
-                  <a-form-item label="默认上报间隔">
-                    <a-input-number v-model:value="settings.reportInterval" :min="10" :max="600" addon-after="秒" />
-                  </a-form-item>
-                  <a-form-item label="流量重置日">
-                    <a-input-number v-model:value="settings.trafficResetDay" :min="0" :max="31" addon-after="日" />
-                  </a-form-item>
-                </div>
-                <div class="setting-switch-row settings-switch-single"><span>Agent 自动更新</span><a-switch v-model:checked="settings.autoUpdate" /></div>
-                <a-divider />
                 <div class="settings-form-grid">
                   <a-form-item label="电信探测点"><a-input v-model:value="settings.customCt" /></a-form-item>
                   <a-form-item label="联通探测点"><a-input v-model:value="settings.customCu" /></a-form-item>
@@ -131,11 +118,15 @@
             <a-card title="安全设置" class="settings-card">
               <a-form layout="vertical">
                 <div class="settings-form-grid">
+                  <a-form-item label="管理员用户名"><a-input v-model:value="settings.adminUsername" /></a-form-item>
+                  <a-form-item label="公开监控页"><a-switch v-model:checked="settings.isPublic" /></a-form-item>
+                  <a-form-item label="全站 Turnstile"><a-switch v-model:checked="settings.turnstileEnabled" /></a-form-item>
+                  <a-form-item label="登录 Turnstile"><a-switch v-model:checked="settings.turnstileLoginEnabled" /></a-form-item>
                   <a-form-item label="Turnstile Site Key"><a-input v-model:value="settings.turnstileSiteKey" /></a-form-item>
                   <a-form-item label="Turnstile Secret"><a-input-password v-model:value="settings.turnstileSecret" /></a-form-item>
                   <a-form-item label="JWT Secret" class="settings-field-wide"><a-input-password v-model:value="settings.jwtSecret" /></a-form-item>
+                  <a-form-item label="静态资源 CSP 来源"><a-input v-model:value="settings.cspStatic" placeholder="https://static.example.com" /></a-form-item>
                   <a-form-item label="API CSP 来源"><a-input v-model:value="settings.cspApi" placeholder="https://api.example.com" /></a-form-item>
-                  <a-form-item label="WebSocket CSP 来源"><a-input v-model:value="settings.cspWs" placeholder="wss://api.example.com" /></a-form-item>
                 </div>
                 <a-divider />
                 <div class="settings-form-grid">
@@ -147,6 +138,7 @@
 
             <a-card title="Cloudflare 与配额" class="settings-card settings-card-span">
               <a-form layout="vertical" class="settings-cloudflare-form">
+                <a-form-item label="Cloudflare Account ID"><a-input v-model:value="settings.cloudflareAccountId" /></a-form-item>
                 <a-form-item label="Cloudflare API Token"><a-input-password v-model:value="settings.cloudflareApiToken" /></a-form-item>
                 <div class="settings-card-action">
                   <a-button :loading="queryingQuota" @click="queryQuota"><template #icon><LineChartOutlined /></template>查询 D1 与 Workers 配额</a-button>
@@ -154,14 +146,14 @@
               </a-form>
             </a-card>
           </div>
-          <div class="settings-save-row"><span v-if="settingsSaved" class="save-status"><CheckCircleOutlined /> 已保存到静态会话</span><a-button type="primary" :loading="savingSettings" :disabled="Boolean(passwordError)" @click="saveSettings"><template #icon><SaveOutlined /></template>保存设置</a-button></div>
+          <div class="settings-save-row"><span v-if="settingsSaved" class="save-status"><CheckCircleOutlined /> 已保存</span><a-button type="primary" :loading="savingSettings" :disabled="Boolean(passwordError)" @click="saveSettings"><template #icon><SaveOutlined /></template>保存设置</a-button></div>
         </a-tab-pane>
 
         <a-tab-pane key="database" tab="数据库">
           <input ref="fileInput" type="file" accept="application/json,.json" hidden @change="importServers" />
           <div class="database-grid">
             <a-card title="导出服务器"><p>生成包含全部服务器配置的 JSON 备份。</p><a-button type="primary" @click="exportServers"><template #icon><ExportOutlined /></template>导出配置</a-button></a-card>
-            <a-card title="导入服务器"><p>从 JSON 备份恢复服务器，重复 ID 将被覆盖。</p><a-button @click="fileInput?.click()"><template #icon><ImportOutlined /></template>选择备份文件</a-button></a-card>
+            <a-card title="导入服务器"><p>从 JSON 备份恢复服务器，重复 ID 将被跳过。</p><a-button @click="fileInput?.click()"><template #icon><ImportOutlined /></template>选择备份文件</a-button></a-card>
             <a-card title="升级数据库"><p>检查并应用当前版本需要的数据库结构。</p><a-popconfirm title="确认执行数据库升级？" ok-text="升级" cancel-text="取消" @confirm="runDatabaseAction('upgrade')"><a-button type="primary"><template #icon><DatabaseOutlined /></template>升级数据库</a-button></a-popconfirm></a-card>
             <a-card title="清理历史数据"><p>保留服务器配置，仅删除历史监控记录。</p><a-popconfirm title="确定清理全部历史记录？" ok-text="清理" cancel-text="取消" @confirm="runDatabaseAction('clear')"><a-button danger><template #icon><DeleteOutlined /></template>清理历史</a-button></a-popconfirm></a-card>
           </div>
@@ -170,7 +162,7 @@
     </main>
 
     <ServerEditorModal v-model:open="serverModalOpen" :server="editingServer" @save="saveServer" />
-    <CommandPreviewModal v-model:open="commandModalOpen" :server="commandServer" @edit="editFromCommand" />
+    <CommandPreviewModal v-model:open="commandModalOpen" :server="commandServer" :api-base="apiEndpoint" :api-secret="apiSecret" @edit="editFromCommand" />
     <ServerDeleteModal v-model:open="deleteModalOpen" :server="deletingServer" @confirm="removeServer" />
 
     <a-modal v-model:open="quotaModalOpen" title="D1 与 Workers 配额" :footer="null">
@@ -180,7 +172,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import AAlert from 'ant-design-vue/es/alert'
 import AButton from 'ant-design-vue/es/button'
 import ABadge from 'ant-design-vue/es/badge'
@@ -188,7 +181,6 @@ import ACard from 'ant-design-vue/es/card'
 import ADivider from 'ant-design-vue/es/divider'
 import AForm, { FormItem as AFormItem } from 'ant-design-vue/es/form'
 import AInput, { InputPassword as AInputPassword } from 'ant-design-vue/es/input'
-import AInputNumber from 'ant-design-vue/es/input-number'
 import AModal from 'ant-design-vue/es/modal'
 import APopconfirm from 'ant-design-vue/es/popconfirm'
 import AProgress from 'ant-design-vue/es/progress'
@@ -205,15 +197,32 @@ import CommandPreviewModal from '../components/CommandPreviewModal.vue'
 import FleetSummary from '../components/FleetSummary.vue'
 import ServerDeleteModal from '../components/ServerDeleteModal.vue'
 import ServerEditorModal from '../components/ServerEditorModal.vue'
-import { apiEndpoints, createDefaultSettings, createManagedServers, type GlobalSettings, type ManagedServer } from '../data/admin'
+import { createDefaultSettings, type GlobalSettings, type ManagedServer } from '../data/admin'
+import {
+  applyAdminSettings,
+  runAdminAction,
+  toAdminServerPayload,
+  toAdminSettingsPayload,
+  toManagedServer,
+  type AdminListResponse,
+  type AdminOperationResponse,
+  type AdminSettingsResponse,
+  type AdminUsageResponse,
+} from '../utils/admin-api'
+import { clearHistory, logout as apiLogout, upgradeDatabase } from '../utils/api'
+import { getApiBases } from '../utils/config'
 import { BILLING_CYCLES } from '../utils/server'
-import { parseServerBackup, serializeServers } from '../utils/mock-admin'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
 
 const activeTab = ref('servers')
+const router = useRouter()
+const apiBases = getApiBases()
+const apiEndpoints = apiBases.map((value, index) => ({ label: apiBases.length > 1 ? `站点 ${index + 1}` : '当前站点', value }))
 const apiEndpoint = ref(apiEndpoints[0]!.value)
+const apiIndex = computed(() => Math.max(0, apiBases.indexOf(apiEndpoint.value)))
+const apiSecret = ref('')
 const search = ref('')
 const statusFilter = ref('all')
 const refreshing = ref(false)
@@ -225,7 +234,8 @@ const quotaModalOpen = ref(false)
 const editingServer = ref<ManagedServer | null>(null)
 const commandServer = ref<ManagedServer | null>(null)
 const deletingServer = ref<ManagedServer | null>(null)
-const servers = ref<ManagedServer[]>(createManagedServers())
+const servers = ref<ManagedServer[]>([])
+const apiStats = ref<AdminListResponse['stats']>({})
 const settings = reactive<GlobalSettings>(createDefaultSettings())
 const settingsSaved = ref(false)
 const savingSettings = ref(false)
@@ -241,7 +251,14 @@ const columns = [
 const stats = computed(() => {
   const online = servers.value.filter((server) => server.status === 'online').length
   const averageCpu = Math.round(servers.value.filter((server) => server.status === 'online').reduce((total, server) => total + server.cpu, 0) / Math.max(online, 1))
-  return { total: servers.value.length, online, offline: servers.value.length - online, averageCpu }
+  return {
+    total: Number(apiStats.value?.total ?? servers.value.length),
+    online: Number(apiStats.value?.online ?? online),
+    offline: Number(apiStats.value?.offline ?? servers.value.length - online),
+    averageCpu: Number(apiStats.value?.avg_cpu ?? averageCpu),
+    downloadRate: Number(apiStats.value?.total_net_in || 0) / 1024 ** 2,
+    uploadRate: Number(apiStats.value?.total_net_out || 0) / 1024 ** 2,
+  }
 })
 const filteredServers = computed(() => {
   const keyword = search.value.trim().toLowerCase()
@@ -253,46 +270,226 @@ const filteredServers = computed(() => {
 })
 const rowSelection = computed(() => ({ selectedRowKeys: selectedIds.value, onChange: (keys: Array<string | number>) => { selectedIds.value = keys.map(String) } }))
 const passwordError = computed(() => settings.adminPassword && settings.adminPassword !== settings.confirmPassword ? '两次输入的密码不一致' : '')
-const quotaItems = [
-  { label: '今日 D1 读取行数', used: '1,284,300', limit: '5,000,000', percent: 26 },
-  { label: '今日 D1 写入行数', used: '18,920', limit: '100,000', percent: 19 },
-  { label: '今日 Workers 请求', used: '63,410', limit: '100,000', percent: 63 },
-  { label: '最近 24 小时读取', used: '3,912,800', limit: '5,000,000', percent: 78 },
-]
+const quotaItems = ref<Array<{ label: string; used: string; limit: string; percent: number }>>([])
+
+const setFeedback = (type: 'success' | 'info' | 'warning' | 'error', message: string) => {
+  feedback.value = { type, message }
+}
+
+async function loadServers() {
+  const data = await runAdminAction<AdminListResponse>('list', {}, apiIndex.value)
+  servers.value = (data.servers || []).map((server) => toManagedServer(server))
+  apiStats.value = data.stats || {}
+  selectedIds.value = selectedIds.value.filter((id) => servers.value.some((server) => server.id === id))
+}
+
+async function loadSettings() {
+  const data = await runAdminAction<AdminSettingsResponse>('get_settings', {}, apiIndex.value)
+  if (data.settings) applyAdminSettings(settings, data.settings)
+  apiSecret.value = String(data.api_secret || '')
+}
+
+async function loadAdmin() {
+  refreshing.value = true
+  try {
+    await Promise.all([loadServers(), loadSettings()])
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '管理数据加载失败')
+  } finally {
+    refreshing.value = false
+  }
+}
 
 function openCreateModal() { editingServer.value = null; serverModalOpen.value = true }
 function openEditModal(server: ManagedServer | Record<string, unknown>) { editingServer.value = server as ManagedServer; serverModalOpen.value = true }
 function openCommandModal(server: ManagedServer | Record<string, unknown>) { commandServer.value = server as ManagedServer; commandModalOpen.value = true }
 function openDeleteModal(server: ManagedServer | Record<string, unknown>) { deletingServer.value = server as ManagedServer; deleteModalOpen.value = true }
 function editFromCommand(server: ManagedServer) { commandModalOpen.value = false; openEditModal(server) }
-function saveServer(server: ManagedServer) { const index = servers.value.findIndex((item) => item.id === server.id); if (index >= 0) servers.value[index] = server; else servers.value.unshift(server); feedback.value = { type: 'success', message: `${server.name} 已保存到静态会话` } }
-function removeServer(id: string) { const target = servers.value.find((server) => server.id === id); servers.value = servers.value.filter((server) => server.id !== id); selectedIds.value = selectedIds.value.filter((item) => item !== id); deleteModalOpen.value = false; feedback.value = { type: 'success', message: `${target?.name ?? id} 已删除` } }
-function batchDelete() { const count = selectedIds.value.length; servers.value = servers.value.filter((server) => !selectedIds.value.includes(server.id)); selectedIds.value = []; feedback.value = { type: 'success', message: `已删除 ${count} 台服务器` } }
-function moveServer(id: string, offset: number) { const index = servers.value.findIndex((server) => server.id === id); const next = index + offset; if (index < 0 || next < 0 || next >= servers.value.length) return; const copy = [...servers.value]; [copy[index], copy[next]] = [copy[next]!, copy[index]!]; servers.value = copy }
-function refreshServers() { refreshing.value = true; window.setTimeout(() => { refreshing.value = false; feedback.value = { type: 'info', message: '静态监控数据已刷新' } }, 500) }
+async function saveServer(server: ManagedServer) {
+  try {
+    const existing = servers.value.some((item) => item.id === server.id)
+    let saved = server
+    if (!existing) {
+      const added = await runAdminAction<AdminOperationResponse>('add', { name: server.name, server_group: server.group, region: server.region }, apiIndex.value)
+      if (!added.id) throw new Error('后端未返回新服务器 ID')
+      saved = { ...server, id: added.id }
+    }
+    await runAdminAction('edit', toAdminServerPayload(saved), apiIndex.value)
+    await loadServers()
+    setFeedback('success', `${saved.name} 已保存`)
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '服务器保存失败')
+  }
+}
+
+async function removeServer(id: string) {
+  const target = servers.value.find((server) => server.id === id)
+  try {
+    await runAdminAction('delete', { id }, apiIndex.value)
+    deleteModalOpen.value = false
+    await loadServers()
+    setFeedback('success', `${target?.name ?? id} 已删除`)
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '删除失败')
+  }
+}
+
+async function batchDelete() {
+  const ids = [...selectedIds.value]
+  if (!ids.length) return
+  try {
+    await runAdminAction('batch_delete', { ids }, apiIndex.value)
+    selectedIds.value = []
+    await loadServers()
+    setFeedback('success', `已删除 ${ids.length} 台服务器`)
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '批量删除失败')
+  }
+}
+
+async function moveServer(id: string, offset: number) {
+  const index = servers.value.findIndex((server) => server.id === id)
+  const next = index + offset
+  if (index < 0 || next < 0 || next >= servers.value.length) return
+  const copy = [...servers.value]
+  ;[copy[index], copy[next]] = [copy[next]!, copy[index]!]
+  servers.value = copy
+  try {
+    await runAdminAction('save_order', { orders: copy.map((server) => server.id) }, apiIndex.value)
+  } catch (error) {
+    await loadServers()
+    setFeedback('error', error instanceof Error ? error.message : '排序保存失败')
+  }
+}
+
+async function toggleServerEnabled(value: ManagedServer | Record<string, unknown>, enabled: boolean) {
+  const server = value as ManagedServer
+  const updated = { ...server, enabled, isHidden: !enabled }
+  try {
+    await runAdminAction('edit', toAdminServerPayload(updated), apiIndex.value)
+    Object.assign(server, updated)
+    setFeedback('success', `${server.name} 已${enabled ? '显示' : '隐藏'}`)
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '状态更新失败')
+  }
+}
+
+async function refreshServers() {
+  refreshing.value = true
+  try {
+    await loadServers()
+    setFeedback('info', '监控数据已刷新')
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '刷新失败')
+  } finally {
+    refreshing.value = false
+  }
+}
 async function copyNote(note: string) { if (!note) return; await navigator.clipboard?.writeText(note); feedback.value = { type: 'success', message: '备注已复制' } }
 function billingLabel(value: string) { return BILLING_CYCLES.find((item) => item.value === value)?.shortLabelZh ?? '月' }
 function isExpiring(value: string) { return Boolean(value) && new Date(value).getTime() - Date.now() < 90 * 86_400_000 }
-function saveSettings() { if (passwordError.value) return; savingSettings.value = true; settingsSaved.value = false; window.setTimeout(() => { savingSettings.value = false; settingsSaved.value = true; feedback.value = { type: 'success', message: '全局设置已保存到静态会话' } }, 600) }
-function testNotification() { testingNotification.value = true; window.setTimeout(() => { testingNotification.value = false; feedback.value = { type: 'success', message: '测试通知已进入发送队列' } }, 600) }
-function queryQuota() { queryingQuota.value = true; window.setTimeout(() => { queryingQuota.value = false; quotaModalOpen.value = true }, 450) }
-function exportServers() { const blob = new Blob([serializeServers(servers.value)], { type: 'application/json' }); const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `edgeprobe-servers-${new Date().toISOString().slice(0, 10)}.json`; link.click(); URL.revokeObjectURL(link.href); feedback.value = { type: 'success', message: `已导出 ${servers.value.length} 台服务器` } }
+async function saveSettings() {
+  if (passwordError.value || savingSettings.value) return
+  if (!settings.adminUsername.trim()) return setFeedback('error', '管理员用户名不能为空')
+  if (settings.jwtSecret && settings.jwtSecret.length < 32) return setFeedback('error', 'JWT Secret 至少需要 32 个字符')
+  if ((settings.turnstileEnabled || settings.turnstileLoginEnabled) && (!settings.turnstileSiteKey || !settings.turnstileSecret)) {
+    return setFeedback('error', '启用 Turnstile 时必须填写 Site Key 和 Secret')
+  }
+  savingSettings.value = true
+  settingsSaved.value = false
+  try {
+    await runAdminAction('save_settings', { settings: toAdminSettingsPayload(settings) }, apiIndex.value)
+    settings.adminPassword = ''
+    settings.confirmPassword = ''
+    settings.jwtSecret = ''
+    settingsSaved.value = true
+    setFeedback('success', '全局设置已保存')
+    await loadSettings()
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '设置保存失败')
+  } finally {
+    savingSettings.value = false
+  }
+}
+
+async function testNotification() {
+  testingNotification.value = true
+  try {
+    await runAdminAction('send_test_notification', { tg_bot_token: settings.telegramBotToken, tg_chat_id: settings.telegramChatId }, apiIndex.value)
+    setFeedback('success', '测试通知已发送')
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '测试通知发送失败')
+  } finally {
+    testingNotification.value = false
+  }
+}
+
+async function queryQuota() {
+  queryingQuota.value = true
+  try {
+    const data = await runAdminAction<AdminUsageResponse>('d1_usage', {
+      cloudflare_account_id: settings.cloudflareAccountId,
+      cloudflare_token: settings.cloudflareApiToken,
+    }, apiIndex.value)
+    const today = data.usage?.today || {}
+    const last24 = data.usage?.last24Hours || {}
+    quotaItems.value = [
+      { label: '今日 D1 读取行数', used: Number(today.rowsRead || 0).toLocaleString(), limit: 'API 未返回限额', percent: 0 },
+      { label: '今日 D1 写入行数', used: Number(today.rowsWritten || 0).toLocaleString(), limit: 'API 未返回限额', percent: 0 },
+      { label: '今日 Workers 请求', used: Number(today.workersRequests || 0).toLocaleString(), limit: 'API 未返回限额', percent: 0 },
+      { label: '最近 24 小时 D1 读取', used: Number(last24.rowsRead || 0).toLocaleString(), limit: 'API 未返回限额', percent: 0 },
+    ]
+    quotaModalOpen.value = true
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '配额查询失败')
+  } finally {
+    queryingQuota.value = false
+  }
+}
+
+async function exportServers() {
+  try {
+    const data = await runAdminAction<AdminOperationResponse & { servers?: Record<string, unknown>[] }>('export_servers', {}, apiIndex.value)
+    const exported = data.servers || []
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' })
+    const link = document.createElement('a')
+    link.href = URL.createObjectURL(blob)
+    link.download = `edgeprobe-servers-${new Date().toISOString().slice(0, 10)}.json`
+    link.click()
+    URL.revokeObjectURL(link.href)
+    setFeedback('success', `已导出 ${exported.length} 台服务器`)
+  } catch (error) {
+    setFeedback('error', error instanceof Error ? error.message : '导出失败')
+  }
+}
 async function importServers(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
   try {
-    const imported = parseServerBackup(await file.text())
-    const merged = new Map(servers.value.map((server) => [server.id, server]))
-    imported.forEach((server) => merged.set(server.id, server))
-    servers.value = [...merged.values()]
-    feedback.value = { type: 'success', message: `已导入 ${imported.length} 台服务器` }
+    const imported: unknown = JSON.parse(await file.text())
+    if (!Array.isArray(imported)) throw new Error('备份文件必须是服务器数组')
+    const result = await runAdminAction<AdminOperationResponse>('import_servers', { servers: imported }, apiIndex.value)
+    await loadServers()
+    setFeedback('success', String(result.message || `已处理 ${imported.length} 台服务器`))
   } catch (error) {
     feedback.value = { type: 'error', message: error instanceof Error ? error.message : '导入失败' }
   } finally {
     input.value = ''
   }
 }
-function runDatabaseAction(action: 'upgrade' | 'clear') { feedback.value = { type: 'success', message: action === 'upgrade' ? '数据库结构已是最新版本' : '历史监控记录已清理' } }
-function logout() { window.sessionStorage.removeItem('edgeprobe-admin'); window.location.hash = '#/admin' }
+async function runDatabaseAction(action: 'upgrade' | 'clear') {
+  const result = action === 'upgrade' ? await upgradeDatabase(apiIndex.value) : await clearHistory(apiIndex.value)
+  setFeedback(result.success ? 'success' : 'error', result.success
+    ? action === 'upgrade' ? '数据库升级完成' : '历史监控记录已清理'
+    : result.error || '数据库操作失败')
+}
+
+function logout() {
+  apiLogout()
+  void router.replace('/admin')
+}
+
+watch(apiEndpoint, () => { void loadAdmin() })
+onMounted(() => { void loadAdmin() })
 </script>

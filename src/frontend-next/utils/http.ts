@@ -36,12 +36,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function redirectToAdminLogin(): void {
-  const adminPath = '/admin'
-  if (window.location.pathname === adminPath || window.location.pathname.startsWith(`${adminPath}/`)) {
-    window.location.reload()
-    return
-  }
-  window.location.assign(adminPath)
+  const currentRoute = window.location.hash.replace(/^#/, '') || '/'
+  const target = `#/admin?redirect=${encodeURIComponent(currentRoute)}`
+  if (window.location.hash.startsWith('#/admin')) return
+  window.location.hash = target
 }
 
 function createHeaders(options: RequestOptions): Headers {

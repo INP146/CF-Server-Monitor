@@ -45,8 +45,8 @@
       <a-tab-pane key="agent" tab="Agent 与探测">
         <a-form layout="vertical" class="server-modal-form">
           <div class="modal-form-grid three-columns">
-            <a-form-item label="采集间隔"><a-input-number v-model:value="form.collectInterval" :min="0" :max="60" addon-after="秒" /></a-form-item>
-            <a-form-item label="上报间隔"><a-input-number v-model:value="form.reportInterval" :min="10" :max="600" addon-after="秒" /></a-form-item>
+            <a-form-item label="采集间隔"><a-select v-model:value="form.collectInterval" :options="collectIntervalOptions" /></a-form-item>
+            <a-form-item label="上报间隔"><a-select v-model:value="form.reportInterval" :options="reportIntervalOptions" /></a-form-item>
             <a-form-item label="自动更新"><div class="inline-switch"><a-switch v-model:checked="form.autoUpdate" /><span>自动安装新 Agent</span></div></a-form-item>
           </div>
           <a-alert v-if="form.autoUpdate" type="warning" show-icon message="自动更新会执行远程升级脚本，请先确认节点环境兼容。" class="editor-alert" />
@@ -83,7 +83,7 @@ const emit = defineEmits<{ save: [server: ManagedServer] }>()
 const activeTab = ref('basic')
 
 const emptyServer = (): ManagedServer => ({
-  ...dashboardServers[0]!, id: `server-${Date.now()}`, name: '', group: 'Default', tags: [], region: 'us', ip: '', location: 'New location', status: 'offline', cpu: 0, memory: 0, disk: 0, download: '0 B/s', upload: '0 B/s', latency: null, uptime: '-', load: '- / - / -', enabled: true, agentVersion: '等待安装', note: '', price: 0, currency: '$', billingCycle: 'month', expireDate: '', autoRenewal: false, trafficLimit: 0, trafficCalcType: 'total', resetDay: 1, collectInterval: 3, reportInterval: 60, customCt: '', customCu: '', customCm: '', customBd: '', rxCorrection: 0, txCorrection: 0, autoUpdate: false, isHidden: false, offlineNotifyDisabled: false,
+  ...dashboardServers[0]!, id: `server-${Date.now()}`, name: '', group: 'Default', tags: [], region: 'us', ip: '', location: 'New location', status: 'offline', cpu: 0, memory: 0, disk: 0, download: '0 B/s', upload: '0 B/s', latency: null, uptime: '-', load: '- / - / -', enabled: true, agentVersion: '等待安装', note: '', price: 0, currency: '$', billingCycle: 'month', expireDate: '', autoRenewal: false, trafficLimit: 0, trafficCalcType: 'total', resetDay: 1, collectInterval: 0, reportInterval: 60, customCt: '', customCu: '', customCm: '', customBd: '', rxCorrection: 0, txCorrection: 0, autoUpdate: false, isHidden: false, offlineNotifyDisabled: false,
 })
 
 const form = reactive<ManagedServer>(emptyServer())
@@ -104,6 +104,8 @@ const billingOptions = BILLING_CYCLES.map((item) => ({ label: item.labelZh, valu
 const trafficOptions = [
   { label: '上下行合计', value: 'total' }, { label: '仅上行', value: 'ul' }, { label: '仅下行', value: 'dl' }, { label: '取较大值', value: 'max' },
 ]
+const collectIntervalOptions = [0, 1, 2, 5, 10].map((value) => ({ label: value === 0 ? '关闭缓存采样' : `${value} 秒`, value }))
+const reportIntervalOptions = [30, 60, 120, 180].map((value) => ({ label: `${value} 秒`, value }))
 const pingNodes = [
   { key: 'customCt' as const, label: '中国电信探测点', placeholder: 'gd-ct-dualstack.ip.zstaticcdn.com' },
   { key: 'customCu' as const, label: '中国联通探测点', placeholder: 'gd-cu-dualstack.ip.zstaticcdn.com' },

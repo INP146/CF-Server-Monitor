@@ -33,6 +33,16 @@ body {
   background: var(--layout-bg);
 }
 
+.access-gate {
+  min-height: 100vh;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 24px;
+  padding: 24px;
+  background: var(--layout-bg);
+}
+
 button,
 input {
   font: inherit;

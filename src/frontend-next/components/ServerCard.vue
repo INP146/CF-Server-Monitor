@@ -127,6 +127,6 @@ function metricColor(value: number): string {
 }
 
 function openDetail() {
-  void router.push(`/server/${props.server.id}`)
+  void router.push({ path: `/server/${props.server.id}`, query: props.server.apiIndex ? { api: props.server.apiIndex } : {} })
 }
 </script>
