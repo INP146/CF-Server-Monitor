@@ -2,7 +2,7 @@
 
 一个基于 Cloudflare Workers + D1 + Durable Objects 的多服务器监控探针系统，支持实时监控、历史数据查看、延迟追踪、地图展示等功能。兼容主流 Linux 系统、Alpine Linux、OpenWrt、macOS（Intel / Apple Silicon）、群晖、Windows 系统。
 
-**当前 Workers 版本：3.0.0-beta.1；Agent 版本：1.3.4**
+**当前 Workers 版本：3.0.0-beta.2；Agent 版本：1.3.4**
 
 为兼容 2.x 已安装节点，系统服务名 `cf-probe`、配置目录及 Windows 脚本文件名
 `cf-server-monitor.ps1` 暂时保持不变；这些标识不代表旧产品仍在并行运行。
@@ -262,12 +262,8 @@ GitHub Actions，更新 `main` 后都会触发对应的部署流程。
 当有新版本部署成功后，可以通过以下命令升级探针，升级过程会自动保留原有配置：
 
 ```bash
-# Linux
-curl -sL https://你的项目.你的子域.workers.dev/install.sh | bash -s install
-# Alpine
-curl -sL https://你的项目.你的子域.workers.dev/install-alpine.sh | sh -s install
-# OpenWrt
-curl -sL https://你的项目.你的子域.workers.dev/install-openwrt.sh | sh -s install
+# Linux（自动识别 Ubuntu / Debian / CentOS / Alpine / OpenWrt / Synology）
+curl -sL https://你的项目.你的子域.workers.dev/install.sh | sh -s install -source=https://你的项目.你的子域.workers.dev
 # macOS
 curl -sL https://你的项目.你的子域.workers.dev/install-mac.sh | sudo bash -s install
 # Windows
@@ -284,12 +280,8 @@ irm https://你的项目.你的子域.workers.dev/cf-server-monitor.ps1 -OutFile
 <summary>卸载探针</summary>
 
 ```bash
-# Linux
-curl -sL https://你的项目.你的子域.workers.dev/install.sh | bash -s uninstall
-# Alpine
-curl -sL https://你的项目.你的子域.workers.dev/install-alpine.sh | sh -s uninstall
-# OpenWrt
-curl -sL https://你的项目.你的子域.workers.dev/install-openwrt.sh | sh -s uninstall
+# Linux（自动识别 Ubuntu / Debian / CentOS / Alpine / OpenWrt / Synology）
+curl -sL https://你的项目.你的子域.workers.dev/install.sh | sh -s uninstall -source=https://你的项目.你的子域.workers.dev
 # macOS
 curl -sL https://你的项目.你的子域.workers.dev/install-mac.sh | sudo bash -s uninstall
 # Windows
@@ -617,9 +609,11 @@ Workers 环境下 CSP 会放在 HTTP Response Header 中返回，并同时设置
 EdgeProbe/
 ├── public/
 │   ├── cf-server-monitor.ps1   # Windows 探针脚本（PowerShell 版，零依赖）
-│   ├── install.sh              # 一键安装脚本 - systemd 系统 (Ubuntu/Debian/CentOS)
-│   ├── install-alpine.sh       # 一键安装脚本 - OpenRC 系统 (Alpine Linux)
-│   ├── install-openwrt.sh      # 一键安装脚本 - procd 系统 (OpenWrt/LEDE)
+│   ├── install.sh              # Linux 统一入口（自动检测发行版和 init 系统）
+│   ├── install-linux.sh        # 通用 Linux 内部实现 (systemd / container)
+│   ├── install-alpine.sh       # Alpine 内部实现 (OpenRC)
+│   ├── install-openwrt.sh      # OpenWrt 内部实现 (procd)
+│   ├── install-synology.sh     # Synology DSM 内部实现 (rc.d)
 │   ├── install-mac.sh          # 一键安装脚本 - macOS (Intel / Apple Silicon)
 │   ├── favicon.ico             # 站点图标
 │   └── logo.svg                # Logo

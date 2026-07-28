@@ -1,0 +1,154 @@
+<template>
+  <a-card
+    class="server-card"
+    :class="{ offline: server.status === 'offline', 'is-list': listView }"
+    hoverable
+    tabindex="0"
+    role="link"
+    @click="openDetail"
+    @keydown.enter="openDetail"
+  >
+    <template #title>
+      <div class="server-card-title">
+        <img :src="`/flags/${server.region}.svg`" alt="" />
+        <div>
+          <strong>{{ server.name }}</strong>
+          <span>{{ server.location }} · {{ server.ip }}</span>
+        </div>
+      </div>
+    </template>
+    <template #extra>
+      <div class="server-card-extra">
+        <a-badge
+          :status="server.status === 'online' ? 'success' : 'error'"
+          :text="server.status === 'online' ? '在线' : '离线'"
+        />
+        <a-button type="text" size="small" aria-label="打开节点详情" @click.stop="openDetail">
+          <template #icon><RightOutlined /></template>
+        </a-button>
+      </div>
+    </template>
+
+    <div class="server-meta">
+      <span class="os-name">
+        <img :src="`/${getOSImage(server.os)}`" alt="" />
+        {{ server.os }} · {{ server.arch }}
+      </span>
+      <span class="tag-list">
+        <a-tag v-for="tag in server.tags" :key="tag" color="blue">{{ tag }}</a-tag>
+      </span>
+    </div>
+
+    <div v-if="(config.show_price && server.priceText) || (config.show_expire && server.expireDate)" class="server-commercial-meta">
+      <span v-if="config.show_price && server.priceText">费用 <strong>{{ server.priceText }}</strong></span>
+      <span v-if="config.show_expire && server.expireDate">到期 <strong>{{ server.expireDate }}</strong></span>
+    </div>
+
+    <div class="metric-bars">
+      <div v-for="metric in metrics" :key="metric.label" class="metric-row">
+        <span>{{ metric.label }}</span>
+        <a-progress
+          :percent="metric.value"
+          :stroke-width="7"
+          :show-info="false"
+          :status="metric.value >= 85 ? 'exception' : 'normal'"
+          :stroke-color="metricColor(metric.value)"
+        />
+        <strong>{{ metric.value }}%</strong>
+      </div>
+    </div>
+
+    <a-divider />
+
+    <div class="network-grid">
+      <div>
+        <span><DownloadOutlined /> 下载</span>
+        <strong>{{ server.download }}</strong>
+      </div>
+      <div>
+        <span><UploadOutlined /> 上传</span>
+        <strong>{{ server.upload }}</strong>
+      </div>
+      <div>
+        <span><WifiOutlined /> 延迟</span>
+        <strong :class="latencyClass">{{ server.latency === null ? '超时' : `${server.latency} ms` }}</strong>
+      </div>
+    </div>
+
+
+    <div v-if="config.show_tf" class="traffic-usage-row">
+      <span>月流量 {{ server.trafficUsed || '0 B' }} / {{ server.trafficLimitText || '不限' }}</span>
+      <a-progress
+        v-if="server.trafficLimitText && server.trafficLimitText !== '不限'"
+        :percent="Math.min(100, server.trafficPercent || 0)"
+        :show-info="false"
+        :stroke-width="5"
+        :status="(server.trafficPercent || 0) >= 95 ? 'exception' : 'normal'"
+      />
+    </div>
+
+    <a-divider />
+
+    <div class="server-card-foot">
+      <span><ClockCircleOutlined /> 运行 {{ server.uptime }}</span>
+      <span>负载 {{ server.load }}</span>
+    </div>
+    <div v-if="config.show_time" class="server-data-time">数据时间 {{ server.dataTime || '-' }}</div>
+  </a-card>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import AButton from 'ant-design-vue/es/button'
+import ABadge from 'ant-design-vue/es/badge'
+import ACard from 'ant-design-vue/es/card'
+import ADivider from 'ant-design-vue/es/divider'
+import AProgress from 'ant-design-vue/es/progress'
+import ATag from 'ant-design-vue/es/tag'
+import {
+  ClockCircleOutlined,
+  DownloadOutlined,
+  RightOutlined,
+  UploadOutlined,
+  WifiOutlined,
+} from '@ant-design/icons-vue'
+
+import type { MockServer } from '../data/dashboard'
+import type { DashboardConfig } from '../types/dashboard'
+import { getOSImage } from '../utils/os-icon'
+import { DEFAULT_SERVER_CARD_CONFIG } from '../utils/server-card'
+
+const props = withDefaults(defineProps<{
+  server: MockServer
+  config?: DashboardConfig
+  listView?: boolean
+}>(), {
+  config: () => ({ ...DEFAULT_SERVER_CARD_CONFIG, site_title: 'EdgeProbe' }),
+  listView: false,
+})
+
+const router = useRouter()
+
+const metrics = computed(() => [
+  { label: 'CPU', value: props.server.cpu },
+  { label: '内存', value: props.server.memory },
+  { label: '磁盘', value: props.server.disk },
+])
+
+const latencyClass = computed(() => {
+  if (props.server.latency === null || props.server.latency >= 180) return 'metric-danger'
+  if (props.server.latency >= 100) return 'metric-warning'
+  return 'metric-healthy'
+})
+
+function metricColor(value: number): string {
+  if (value >= 85) return '#dc2626'
+  if (value >= 65) return '#eab308'
+  return '#16a34a'
+}
+
+function openDetail() {
+  void router.push({ path: `/server/${props.server.id}`, query: props.server.apiIndex ? { api: props.server.apiIndex } : {} })
+}
+</script>

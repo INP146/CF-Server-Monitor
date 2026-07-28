@@ -84,6 +84,11 @@ export class MetricsBroadcaster extends DurableObject<Env> {
     return scope === 'all' || this._isValidServerId(scope);
   }
 
+  private _normalizeScope(scope: string): string {
+    const value = scope.trim();
+    return value.toLowerCase() === 'all' ? 'all' : value;
+  }
+
   private _normalizeServerIds(ids: unknown): { ok: boolean; ids: string[] } {
     if (ids === undefined) return { ok: true, ids: [] };
     if (!Array.isArray(ids) || ids.length > MAX_SUBSCRIBE_IDS) {
@@ -154,7 +159,7 @@ export class MetricsBroadcaster extends DurableObject<Env> {
       }
 
       const raw = url.searchParams.get('subscribe') || 'all';
-      const scope = raw.trim().toLowerCase();
+      const scope = this._normalizeScope(raw);
       if (!this._isValidScope(scope)) {
         return new Response('Invalid subscription scope', { status: 400 });
       }
@@ -427,7 +432,7 @@ export class MetricsBroadcaster extends DurableObject<Env> {
           return;
         }
 
-        const scope = rawScope.trim().toLowerCase();
+        const scope = this._normalizeScope(rawScope);
         if (!this._isValidScope(scope)) {
           this._closeInvalidSubscription(ws);
           return;

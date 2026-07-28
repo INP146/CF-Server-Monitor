@@ -1058,7 +1058,7 @@ const addServer = async () => {
 
 const getInstallCommand = (serverId) => {
   const HOST = selectedApiBase.value
-  return `curl -sL ${HOST}/install.sh | bash -s install -id=${serverId} -secret='${apiSecret.value}' -url=${HOST}/update`
+  return `curl -sL ${HOST}/install.sh | sh -s install -source='${HOST}' -id=${serverId} -secret='${apiSecret.value}' -url=${HOST}/update`
 }
 
 const getUninstallCommand = () => {
@@ -1066,14 +1066,11 @@ const getUninstallCommand = () => {
   if (deleteTargetOs.value === 'windows') {
     return `irm ${HOST}/cf-server-monitor.ps1 -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 uninstall`
   }
-  const shell = deleteTargetOs.value === 'alpine' || deleteTargetOs.value === 'openwrt' ? 'sh' : 'bash'
+  const shell = deleteTargetOs.value === 'mac' ? 'bash' : 'sh'
   const sudoPrefix = deleteTargetOs.value === 'mac' ? 'sudo ' : ''
-  const script = deleteTargetOs.value === 'alpine' ? 'install-alpine.sh'
-    : deleteTargetOs.value === 'openwrt' ? 'install-openwrt.sh'
-    : deleteTargetOs.value === 'mac' ? 'install-mac.sh'
-    : deleteTargetOs.value === 'synology' ? 'install-synology.sh'
-    : 'install.sh'
-  return `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s uninstall`
+  const script = deleteTargetOs.value === 'mac' ? 'install-mac.sh' : 'install.sh'
+  const source = deleteTargetOs.value === 'mac' ? '' : ` -source='${HOST}'`
+  return `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s uninstall${source}`
 }
 
 const copyCmd = (serverId) => {
@@ -1119,14 +1116,11 @@ const getCustomInstallCommand = () => {
     if (hasCorrectionValue(txCorrection.value)) params.push(`-TxCorrection ${txCorrection.value}`)
     return `irm ${HOST}/cf-server-monitor.ps1 -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 ${params.join(' ')}`
   }
-  const shell = targetOs.value === 'alpine' || targetOs.value === 'openwrt' ? 'sh' : 'bash'
+  const shell = targetOs.value === 'mac' ? 'bash' : 'sh'
   const sudoPrefix = targetOs.value === 'mac' ? 'sudo ' : ''
-  const script = targetOs.value === 'alpine' ? 'install-alpine.sh'
-    : targetOs.value === 'openwrt' ? 'install-openwrt.sh'
-    : targetOs.value === 'mac' ? 'install-mac.sh'
-    : targetOs.value === 'synology' ? 'install-synology.sh'
-    : 'install.sh'
-  let cmd = `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s install -id=${copyServerId.value} -secret='${apiSecret.value}' -url=${HOST}/update -collect_interval=${collectInterval.value} -interval=${reportInterval.value} -reset_day=${resetDay.value ?? 1} -auto_update=${autoUpdateFlag}`
+  const script = targetOs.value === 'mac' ? 'install-mac.sh' : 'install.sh'
+  const source = targetOs.value === 'mac' ? '' : ` -source='${HOST}'`
+  let cmd = `curl -sL ${HOST}/${script} | ${sudoPrefix}${shell} -s install${source} -id=${copyServerId.value} -secret='${apiSecret.value}' -url=${HOST}/update -collect_interval=${collectInterval.value} -interval=${reportInterval.value} -reset_day=${resetDay.value ?? 1} -auto_update=${autoUpdateFlag}`
   if (customCt.value) cmd += ` -ct=${customCt.value}`
   if (customCu.value) cmd += ` -cu=${customCu.value}`
   if (customCm.value) cmd += ` -cm=${customCm.value}`
