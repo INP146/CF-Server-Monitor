@@ -9,11 +9,8 @@
       <div class="form-group">
         <label class="form-label">{{ trans.targetOs }}</label>
         <select :value="targetOs" class="form-select" @change="$emit('update:target-os', $event.target.value)">
-          <option value="linux">Linux (Ubuntu/Debian/CentOS)</option>
-          <option value="alpine">Alpine Linux</option>
-          <option value="openwrt">OpenWrt / LEDE / ImmortalWrt</option>
+          <option value="linux">Linux（自动检测发行版）</option>
           <option value="mac">macOS (Intel / Apple Silicon)</option>
-          <option value="synology">Synology DSM (群晖)</option>
           <option value="windows">Windows</option>
         </select>
       </div>

@@ -1,6 +1,6 @@
 import { dashboardServers, type MockServer } from './dashboard'
 
-export type TargetOS = 'linux' | 'alpine' | 'openwrt' | 'mac' | 'synology' | 'windows'
+export type TargetOS = 'linux' | 'mac' | 'windows'
 export type TrafficCalculation = 'total' | 'ul' | 'dl' | 'max'
 
 export interface ManagedServer extends MockServer {

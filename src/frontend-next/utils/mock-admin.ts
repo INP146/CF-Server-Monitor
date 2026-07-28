@@ -1,20 +1,14 @@
 import type { ManagedServer, TargetOS } from '../data/admin'
 
 export const targetOSOptions: Array<{ label: string; value: TargetOS }> = [
-  { label: 'Linux (Ubuntu / Debian / CentOS)', value: 'linux' },
-  { label: 'Alpine Linux', value: 'alpine' },
-  { label: 'OpenWrt / LEDE / ImmortalWrt', value: 'openwrt' },
+  { label: 'Linux (自动检测发行版)', value: 'linux' },
   { label: 'macOS (Intel / Apple Silicon)', value: 'mac' },
-  { label: 'Synology DSM', value: 'synology' },
   { label: 'Windows', value: 'windows' },
 ]
 
 const scriptByOS: Record<TargetOS, string> = {
   linux: 'install.sh',
-  alpine: 'install-alpine.sh',
-  openwrt: 'install-openwrt.sh',
   mac: 'install-mac.sh',
-  synology: 'install-synology.sh',
   windows: 'cf-server-monitor.ps1',
 }
 
@@ -51,10 +45,11 @@ export function buildInstallCommand(
     if (hasCorrection(server.txCorrection)) parameters.push(`-TxCorrection ${server.txCorrection}`)
     return `irm ${powershellQuote(`${base}/${getInstallerScript(targetOS)}`)} -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 ${parameters.join(' ')}`
   }
-  const shell = targetOS === 'alpine' || targetOS === 'openwrt' ? 'sh' : 'bash'
+  const shell = targetOS === 'mac' ? 'bash' : 'sh'
   const sudo = targetOS === 'mac' ? 'sudo ' : ''
   const parameters = [
     'install',
+    ...(targetOS === 'mac' ? [] : [`-source=${shellQuote(base)}`]),
     `-id=${shellQuote(server.id)}`,
     `-secret=${shellQuote(apiSecret)}`,
     `-url=${shellQuote(`${base}/update`)}`,
@@ -81,9 +76,10 @@ export function buildUninstallCommand(
   if (targetOS === 'windows') {
     return `irm ${powershellQuote(`${base}/${getInstallerScript(targetOS)}`)} -OutFile cf-server-monitor.ps1; powershell -ExecutionPolicy Bypass -File .\\cf-server-monitor.ps1 uninstall`
   }
-  const shell = targetOS === 'alpine' || targetOS === 'openwrt' ? 'sh' : 'bash'
+  const shell = targetOS === 'mac' ? 'bash' : 'sh'
   const sudo = targetOS === 'mac' ? 'sudo ' : ''
-  return `curl -fsSL ${shellQuote(`${base}/${getInstallerScript(targetOS)}`)} | ${sudo}${shell} -s uninstall`
+  const source = targetOS === 'mac' ? '' : ` -source=${shellQuote(base)}`
+  return `curl -fsSL ${shellQuote(`${base}/${getInstallerScript(targetOS)}`)} | ${sudo}${shell} -s uninstall${source}`
 }
 
 export function serializeServers(servers: ManagedServer[]): string {

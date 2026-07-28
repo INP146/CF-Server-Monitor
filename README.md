@@ -262,12 +262,8 @@ GitHub Actions，更新 `main` 后都会触发对应的部署流程。
 当有新版本部署成功后，可以通过以下命令升级探针，升级过程会自动保留原有配置：
 
 ```bash
-# Linux
-curl -sL https://你的项目.你的子域.workers.dev/install.sh | bash -s install
-# Alpine
-curl -sL https://你的项目.你的子域.workers.dev/install-alpine.sh | sh -s install
-# OpenWrt
-curl -sL https://你的项目.你的子域.workers.dev/install-openwrt.sh | sh -s install
+# Linux（自动识别 Ubuntu / Debian / CentOS / Alpine / OpenWrt / Synology）
+curl -sL https://你的项目.你的子域.workers.dev/install.sh | sh -s install -source=https://你的项目.你的子域.workers.dev
 # macOS
 curl -sL https://你的项目.你的子域.workers.dev/install-mac.sh | sudo bash -s install
 # Windows
@@ -284,12 +280,8 @@ irm https://你的项目.你的子域.workers.dev/cf-server-monitor.ps1 -OutFile
 <summary>卸载探针</summary>
 
 ```bash
-# Linux
-curl -sL https://你的项目.你的子域.workers.dev/install.sh | bash -s uninstall
-# Alpine
-curl -sL https://你的项目.你的子域.workers.dev/install-alpine.sh | sh -s uninstall
-# OpenWrt
-curl -sL https://你的项目.你的子域.workers.dev/install-openwrt.sh | sh -s uninstall
+# Linux（自动识别 Ubuntu / Debian / CentOS / Alpine / OpenWrt / Synology）
+curl -sL https://你的项目.你的子域.workers.dev/install.sh | sh -s uninstall -source=https://你的项目.你的子域.workers.dev
 # macOS
 curl -sL https://你的项目.你的子域.workers.dev/install-mac.sh | sudo bash -s uninstall
 # Windows
@@ -617,9 +609,11 @@ Workers 环境下 CSP 会放在 HTTP Response Header 中返回，并同时设置
 EdgeProbe/
 ├── public/
 │   ├── cf-server-monitor.ps1   # Windows 探针脚本（PowerShell 版，零依赖）
-│   ├── install.sh              # 一键安装脚本 - systemd 系统 (Ubuntu/Debian/CentOS)
-│   ├── install-alpine.sh       # 一键安装脚本 - OpenRC 系统 (Alpine Linux)
-│   ├── install-openwrt.sh      # 一键安装脚本 - procd 系统 (OpenWrt/LEDE)
+│   ├── install.sh              # Linux 统一入口（自动检测发行版和 init 系统）
+│   ├── install-linux.sh        # 通用 Linux 内部实现 (systemd / container)
+│   ├── install-alpine.sh       # Alpine 内部实现 (OpenRC)
+│   ├── install-openwrt.sh      # OpenWrt 内部实现 (procd)
+│   ├── install-synology.sh     # Synology DSM 内部实现 (rc.d)
 │   ├── install-mac.sh          # 一键安装脚本 - macOS (Intel / Apple Silicon)
 │   ├── favicon.ico             # 站点图标
 │   └── logo.svg                # Logo

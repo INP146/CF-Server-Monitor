@@ -349,8 +349,8 @@ test('builds platform-specific agent commands with API credentials', () => {
     txCorrection: 2.5,
   }
   const linux = buildInstallCommand(server, 'linux', 'https://edge.example.com/', 'secret')
-  assert.match(linux, /install\.sh' \| bash -s install/)
-  assert.match(linux, /-id='lax-core-01'.*-secret='secret'.*-url='https:\/\/edge\.example\.com\/update'/)
+  assert.match(linux, /install\.sh' \| sh -s install/)
+  assert.match(linux, /-source='https:\/\/edge\.example\.com'.*-id='lax-core-01'.*-secret='secret'.*-url='https:\/\/edge\.example\.com\/update'/)
   assert.match(linux, /-collect_interval=0.*-interval=60.*-reset_day=1.*-auto_update=1/)
   assert.match(linux, /-ct='ct\.example\.com'.*-cu='cu\.example\.com'.*-cm='cm\.example\.com'.*-bd='bd\.example\.com'/)
   assert.match(linux, /-rx_correction=1\.5.*-tx_correction=2\.5/)
@@ -360,10 +360,10 @@ test('builds platform-specific agent commands with API credentials', () => {
   assert.match(windows, /-CollectInterval 0.*-ReportInterval 60.*-ResetDay 1.*-AutoUpdate 1/)
   assert.match(windows, /-RxCorrection 1\.5.*-TxCorrection 2\.5/)
   assert.match(buildInstallCommand(server, 'mac', 'https://edge.example.com', 'secret'), /install-mac\.sh' \| sudo bash -s install/)
-  assert.match(buildUninstallCommand(server, 'openwrt', 'https://edge.example.com'), /install-openwrt\.sh' \| sh -s uninstall/)
+  assert.match(buildUninstallCommand(server, 'linux', 'https://edge.example.com'), /install\.sh' \| sh -s uninstall -source='https:\/\/edge\.example\.com'/)
   assert.match(buildUninstallCommand(server, 'windows', 'https://edge.example.com'), /cf-server-monitor\.ps1'.* uninstall/)
 
-  for (const target of ['linux', 'alpine', 'openwrt', 'mac', 'synology', 'windows'] as const) {
+  for (const target of ['linux', 'mac', 'windows'] as const) {
     assert.equal(existsSync(new URL(`../public/${getInstallerScript(target)}`, import.meta.url)), true, target)
   }
   for (const asset of ['leaflet.js', 'leaflet.css', 'world.zh.json']) {
