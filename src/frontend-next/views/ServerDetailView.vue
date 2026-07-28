@@ -14,7 +14,9 @@
           </div>
           <p>{{ server.location }} · {{ server.ip }} · {{ server.os }} {{ server.arch }}</p>
         </div>
-        <a-segmented :value="currentHours" :options="timeOptions" @change="selectRange" />
+        <a-radio-group :value="currentHours" button-style="solid" class="history-range" aria-label="历史时间范围" @change="selectRange($event.target.value)">
+          <a-radio-button v-for="option in timeOptions" :key="option.value" :value="option.value">{{ option.label }}</a-radio-button>
+        </a-radio-group>
       </section>
 
       <section class="detail-summary-grid" aria-label="节点摘要">
@@ -66,7 +68,7 @@ import ABadge from 'ant-design-vue/es/badge'
 import ACard from 'ant-design-vue/es/card'
 import AModal from 'ant-design-vue/es/modal'
 import AResult from 'ant-design-vue/es/result'
-import ASegmented from 'ant-design-vue/es/segmented'
+import { RadioButton as ARadioButton, RadioGroup as ARadioGroup } from 'ant-design-vue/es/radio'
 import { ArrowLeftOutlined, SettingOutlined } from '@ant-design/icons-vue'
 
 import AppHeader from '../components/AppHeader.vue'
