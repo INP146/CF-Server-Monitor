@@ -9,12 +9,16 @@
       </AppHeader>
 
       <div class="dashboard-content">
-        <section class="summary-grid" aria-label="监控摘要">
-          <a-card class="summary-card"><a-statistic title="服务器" :value="servers.length"><template #prefix><CloudServerOutlined class="stat-icon orange" /></template></a-statistic><div class="summary-foot"><span class="status-dot online" /> {{ onlineCount }} 台在线 · {{ offlineCount }} 台离线</div></a-card>
-          <a-card class="summary-card"><a-statistic title="平均 CPU" :value="averageCpu" suffix="%"><template #prefix><LineChartOutlined class="stat-icon green" /></template></a-statistic><div class="summary-foot positive">所有在线节点</div></a-card>
-          <a-card class="summary-card"><a-statistic title="下载速率" :value="3.84" :precision="2" suffix="MB/s"><template #prefix><DownloadOutlined class="stat-icon blue" /></template></a-statistic><div class="summary-foot muted">总计 18.42 TB</div></a-card>
-          <a-card class="summary-card"><a-statistic title="上传速率" :value="1.27" :precision="2" suffix="MB/s"><template #prefix><UploadOutlined class="stat-icon yellow" /></template></a-statistic><div class="summary-foot muted">总计 7.96 TB</div></a-card>
-        </section>
+        <FleetSummary
+          :total="servers.length"
+          :online="onlineCount"
+          :offline="offlineCount"
+          :average-cpu="averageCpu"
+          :download-rate="3.84"
+          download-total="18.42 TB"
+          :upload-rate="1.27"
+          upload-total="7.96 TB"
+        />
 
         <section class="fleet-section">
           <div ref="toolbarRef" class="fleet-toolbar fleet-toolbar-primary" :class="{ 'is-stacked': isToolbarStacked }">
@@ -77,11 +81,11 @@ import AInput from 'ant-design-vue/es/input'
 import AProgress from 'ant-design-vue/es/progress'
 import { RadioButton as ARadioButton, RadioGroup as ARadioGroup } from 'ant-design-vue/es/radio'
 import ASelect, { SelectOption as ASelectOption } from 'ant-design-vue/es/select'
-import AStatistic from 'ant-design-vue/es/statistic'
 import ATable from 'ant-design-vue/es/table'
-import { AppstoreOutlined, CloudServerOutlined, DownloadOutlined, LineChartOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined, UploadOutlined } from '@ant-design/icons-vue'
+import { AppstoreOutlined, PieChartOutlined, SearchOutlined, SettingOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
 
 import AppHeader from '../components/AppHeader.vue'
+import FleetSummary from '../components/FleetSummary.vue'
 import ServerCard from '../components/ServerCard.vue'
 import { apiEndpoints } from '../data/admin'
 import { dashboardServers } from '../data/dashboard'

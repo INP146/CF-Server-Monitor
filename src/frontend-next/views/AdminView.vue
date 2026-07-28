@@ -7,12 +7,17 @@
     </AppHeader>
 
     <main class="admin-content">
-      <section class="admin-summary-grid">
-        <div><span>服务器</span><strong>{{ stats.total }}</strong></div>
-        <div><span>在线</span><strong class="text-success">{{ stats.online }}</strong></div>
-        <div><span>离线</span><strong class="text-danger">{{ stats.offline }}</strong></div>
-        <div><span>平均 CPU</span><strong>{{ stats.averageCpu }}%</strong></div>
-      </section>
+      <FleetSummary
+        class="admin-overview-grid"
+        :total="stats.total"
+        :online="stats.online"
+        :offline="stats.offline"
+        :average-cpu="stats.averageCpu"
+        :download-rate="3.84"
+        download-total="18.42 TB"
+        :upload-rate="1.27"
+        upload-total="7.96 TB"
+      />
 
       <a-alert v-if="feedback" :type="feedback.type" show-icon closable :message="feedback.message" class="admin-feedback" @close="feedback = null" />
 
@@ -50,15 +55,104 @@
 
         <a-tab-pane key="settings" tab="全局设置">
           <div class="settings-layout settings-layout-wide">
-            <a-card title="展示设置" class="settings-card"><a-form layout="vertical"><a-form-item label="站点标题"><a-input v-model:value="settings.siteTitle" /></a-form-item><div class="modal-form-grid"><a-form-item label="默认视图"><a-select v-model:value="settings.defaultView"><a-select-option value="bar">卡片</a-select-option><a-select-option value="ring">环形</a-select-option><a-select-option value="table">表格</a-select-option></a-select></a-form-item><a-form-item label="默认语言"><a-select v-model:value="settings.language"><a-select-option value="zh">简体中文</a-select-option><a-select-option value="en">English</a-select-option></a-select></a-form-item></div><a-form-item label="背景图片"><a-input v-model:value="settings.backgroundImage" placeholder="https://..." addon-after="URL" /></a-form-item><div class="setting-switch-row"><span>显示价格</span><a-switch v-model:checked="settings.showPrice" /></div><div class="setting-switch-row"><span>显示到期时间</span><a-switch v-model:checked="settings.showExpire" /></div><div class="setting-switch-row"><span>显示流量信息</span><a-switch v-model:checked="settings.showTraffic" /></div><div class="setting-switch-row"><span>显示更新时间</span><a-switch v-model:checked="settings.showUpdateTime" /></div><div class="setting-switch-row"><span>允许长期历史</span><a-switch v-model:checked="settings.showLongHistory" /></div></a-form></a-card>
+            <a-card title="展示设置" class="settings-card">
+              <a-form layout="vertical">
+                <div class="settings-form-grid">
+                  <a-form-item label="站点标题" class="settings-field-wide">
+                    <a-input v-model:value="settings.siteTitle" />
+                  </a-form-item>
+                  <a-form-item label="默认视图">
+                    <a-select v-model:value="settings.defaultView">
+                      <a-select-option value="bar">卡片</a-select-option>
+                      <a-select-option value="ring">环形</a-select-option>
+                      <a-select-option value="table">表格</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="默认语言">
+                    <a-select v-model:value="settings.language">
+                      <a-select-option value="zh">简体中文</a-select-option>
+                      <a-select-option value="en">English</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                  <a-form-item label="背景图片" class="settings-field-wide">
+                    <a-input v-model:value="settings.backgroundImage" placeholder="https://..." addon-after="URL" />
+                  </a-form-item>
+                </div>
+                <div class="settings-toggle-grid">
+                  <div class="setting-switch-row"><span>显示价格</span><a-switch v-model:checked="settings.showPrice" /></div>
+                  <div class="setting-switch-row"><span>显示到期时间</span><a-switch v-model:checked="settings.showExpire" /></div>
+                  <div class="setting-switch-row"><span>显示流量信息</span><a-switch v-model:checked="settings.showTraffic" /></div>
+                  <div class="setting-switch-row"><span>显示更新时间</span><a-switch v-model:checked="settings.showUpdateTime" /></div>
+                  <div class="setting-switch-row"><span>允许长期历史</span><a-switch v-model:checked="settings.showLongHistory" /></div>
+                </div>
+              </a-form>
+            </a-card>
 
-            <a-card title="采集与探测" class="settings-card"><a-form layout="vertical"><div class="modal-form-grid"><a-form-item label="默认采集间隔"><a-input-number v-model:value="settings.collectInterval" :min="0" :max="60" addon-after="秒" /></a-form-item><a-form-item label="默认上报间隔"><a-input-number v-model:value="settings.reportInterval" :min="10" :max="600" addon-after="秒" /></a-form-item></div><a-form-item label="默认流量重置日"><a-input-number v-model:value="settings.trafficResetDay" :min="0" :max="31" addon-after="日" /></a-form-item><div class="setting-switch-row"><span>Agent 自动更新</span><a-switch v-model:checked="settings.autoUpdate" /></div><a-divider /><div class="modal-form-grid"><a-form-item label="电信探测点"><a-input v-model:value="settings.customCt" /></a-form-item><a-form-item label="联通探测点"><a-input v-model:value="settings.customCu" /></a-form-item><a-form-item label="移动探测点"><a-input v-model:value="settings.customCm" /></a-form-item><a-form-item label="百度探测点"><a-input v-model:value="settings.customBd" /></a-form-item></div></a-form></a-card>
+            <a-card title="采集与探测" class="settings-card">
+              <a-form layout="vertical">
+                <div class="settings-form-grid settings-form-grid-three">
+                  <a-form-item label="默认采集间隔">
+                    <a-input-number v-model:value="settings.collectInterval" :min="0" :max="60" addon-after="秒" />
+                  </a-form-item>
+                  <a-form-item label="默认上报间隔">
+                    <a-input-number v-model:value="settings.reportInterval" :min="10" :max="600" addon-after="秒" />
+                  </a-form-item>
+                  <a-form-item label="流量重置日">
+                    <a-input-number v-model:value="settings.trafficResetDay" :min="0" :max="31" addon-after="日" />
+                  </a-form-item>
+                </div>
+                <div class="setting-switch-row settings-switch-single"><span>Agent 自动更新</span><a-switch v-model:checked="settings.autoUpdate" /></div>
+                <a-divider />
+                <div class="settings-form-grid">
+                  <a-form-item label="电信探测点"><a-input v-model:value="settings.customCt" /></a-form-item>
+                  <a-form-item label="联通探测点"><a-input v-model:value="settings.customCu" /></a-form-item>
+                  <a-form-item label="移动探测点"><a-input v-model:value="settings.customCm" /></a-form-item>
+                  <a-form-item label="百度探测点"><a-input v-model:value="settings.customBd" /></a-form-item>
+                </div>
+              </a-form>
+            </a-card>
 
-            <a-card title="通知设置" class="settings-card"><a-form layout="vertical"><a-form-item label="Telegram Bot Token"><a-input-password v-model:value="settings.telegramBotToken" /></a-form-item><a-form-item label="Telegram Chat ID"><a-input-password v-model:value="settings.telegramChatId" /></a-form-item><a-form-item label="离线通知延迟"><a-select v-model:value="settings.offlineNotifyMinutes"><a-select-option :value="0">关闭</a-select-option><a-select-option v-for="minute in [2, 3, 5, 10, 15]" :key="minute" :value="minute">{{ minute }} 分钟</a-select-option></a-select></a-form-item><a-button :loading="testingNotification" @click="testNotification"><template #icon><SendOutlined /></template>发送测试通知</a-button></a-form></a-card>
+            <a-card title="通知设置" class="settings-card settings-card-notification">
+              <a-form layout="vertical">
+                <a-form-item label="Telegram Bot Token"><a-input-password v-model:value="settings.telegramBotToken" /></a-form-item>
+                <a-form-item label="Telegram Chat ID"><a-input-password v-model:value="settings.telegramChatId" /></a-form-item>
+                <a-form-item label="离线通知延迟">
+                  <a-select v-model:value="settings.offlineNotifyMinutes">
+                    <a-select-option :value="0">关闭</a-select-option>
+                    <a-select-option v-for="minute in [2, 3, 5, 10, 15]" :key="minute" :value="minute">{{ minute }} 分钟</a-select-option>
+                  </a-select>
+                </a-form-item>
+                <div class="settings-card-action">
+                  <a-button :loading="testingNotification" @click="testNotification"><template #icon><SendOutlined /></template>发送测试通知</a-button>
+                </div>
+              </a-form>
+            </a-card>
 
-            <a-card title="安全设置" class="settings-card"><a-form layout="vertical"><div class="modal-form-grid"><a-form-item label="Turnstile Site Key"><a-input v-model:value="settings.turnstileSiteKey" /></a-form-item><a-form-item label="Turnstile Secret"><a-input-password v-model:value="settings.turnstileSecret" /></a-form-item></div><a-form-item label="JWT Secret"><a-input-password v-model:value="settings.jwtSecret" /></a-form-item><div class="modal-form-grid"><a-form-item label="API CSP 来源"><a-input v-model:value="settings.cspApi" placeholder="https://api.example.com" /></a-form-item><a-form-item label="WebSocket CSP 来源"><a-input v-model:value="settings.cspWs" placeholder="wss://api.example.com" /></a-form-item></div><a-divider /><div class="modal-form-grid"><a-form-item label="新管理员密码"><a-input-password v-model:value="settings.adminPassword" /></a-form-item><a-form-item label="确认密码" :validate-status="passwordError ? 'error' : ''" :help="passwordError"><a-input-password v-model:value="settings.confirmPassword" /></a-form-item></div></a-form></a-card>
+            <a-card title="安全设置" class="settings-card">
+              <a-form layout="vertical">
+                <div class="settings-form-grid">
+                  <a-form-item label="Turnstile Site Key"><a-input v-model:value="settings.turnstileSiteKey" /></a-form-item>
+                  <a-form-item label="Turnstile Secret"><a-input-password v-model:value="settings.turnstileSecret" /></a-form-item>
+                  <a-form-item label="JWT Secret" class="settings-field-wide"><a-input-password v-model:value="settings.jwtSecret" /></a-form-item>
+                  <a-form-item label="API CSP 来源"><a-input v-model:value="settings.cspApi" placeholder="https://api.example.com" /></a-form-item>
+                  <a-form-item label="WebSocket CSP 来源"><a-input v-model:value="settings.cspWs" placeholder="wss://api.example.com" /></a-form-item>
+                </div>
+                <a-divider />
+                <div class="settings-form-grid">
+                  <a-form-item label="新管理员密码"><a-input-password v-model:value="settings.adminPassword" /></a-form-item>
+                  <a-form-item label="确认密码" :validate-status="passwordError ? 'error' : ''" :help="passwordError"><a-input-password v-model:value="settings.confirmPassword" /></a-form-item>
+                </div>
+              </a-form>
+            </a-card>
 
-            <a-card title="Cloudflare 与配额" class="settings-card settings-card-span"><a-form layout="vertical"><a-form-item label="Cloudflare API Token"><a-input-password v-model:value="settings.cloudflareApiToken" /></a-form-item><div class="database-actions"><a-button :loading="queryingQuota" @click="queryQuota"><template #icon><LineChartOutlined /></template>查询 D1 与 Workers 配额</a-button></div></a-form></a-card>
+            <a-card title="Cloudflare 与配额" class="settings-card settings-card-span">
+              <a-form layout="vertical" class="settings-cloudflare-form">
+                <a-form-item label="Cloudflare API Token"><a-input-password v-model:value="settings.cloudflareApiToken" /></a-form-item>
+                <div class="settings-card-action">
+                  <a-button :loading="queryingQuota" @click="queryQuota"><template #icon><LineChartOutlined /></template>查询 D1 与 Workers 配额</a-button>
+                </div>
+              </a-form>
+            </a-card>
           </div>
           <div class="settings-save-row"><span v-if="settingsSaved" class="save-status"><CheckCircleOutlined /> 已保存到静态会话</span><a-button type="primary" :loading="savingSettings" :disabled="Boolean(passwordError)" @click="saveSettings"><template #icon><SaveOutlined /></template>保存设置</a-button></div>
         </a-tab-pane>
@@ -108,6 +202,7 @@ import { ArrowDownOutlined, ArrowUpOutlined, CheckCircleOutlined, CodeOutlined, 
 
 import AppHeader from '../components/AppHeader.vue'
 import CommandPreviewModal from '../components/CommandPreviewModal.vue'
+import FleetSummary from '../components/FleetSummary.vue'
 import ServerDeleteModal from '../components/ServerDeleteModal.vue'
 import ServerEditorModal from '../components/ServerEditorModal.vue'
 import { apiEndpoints, createDefaultSettings, createManagedServers, type GlobalSettings, type ManagedServer } from '../data/admin'

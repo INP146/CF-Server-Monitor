@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, toRaw, watch } from 'vue'
 import AAlert from 'ant-design-vue/es/alert'
 import AForm, { FormItem as AFormItem } from 'ant-design-vue/es/form'
 import AInput, { Textarea as ATextarea } from 'ant-design-vue/es/input'
@@ -87,9 +87,14 @@ const emptyServer = (): ManagedServer => ({
 })
 
 const form = reactive<ManagedServer>(emptyServer())
+
+function cloneServer(server: ManagedServer): ManagedServer {
+  return structuredClone(toRaw(server))
+}
+
 watch(() => [open.value, props.server] as const, ([isOpen, server]) => {
   if (!isOpen) return
-  Object.assign(form, emptyServer(), server ? structuredClone(server) : {})
+  Object.assign(form, emptyServer(), server ? cloneServer(server) : {})
   activeTab.value = 'basic'
 }, { immediate: true })
 
@@ -114,8 +119,11 @@ const hasPingErrors = computed(() => pingNodes.some((node) => Boolean(pingError(
 
 function submit() {
   if (!form.name.trim() || hasPingErrors.value) return
-  emit('save', structuredClone({ ...form, name: form.name.trim(), group: form.group.trim() || 'Default', region: form.region.trim().toLowerCase() }))
+  const server = cloneServer(form)
+  server.name = server.name.trim()
+  server.group = server.group.trim() || 'Default'
+  server.region = server.region.trim().toLowerCase()
+  emit('save', server)
   open.value = false
 }
 </script>
-

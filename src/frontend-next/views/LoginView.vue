@@ -11,7 +11,7 @@
       <a-card class="login-card">
         <div class="login-heading">
           <h1 id="login-title">登录管理后台</h1>
-          <p>选择管理站点并输入管理员密码</p>
+          <p>选择管理站点并输入管理员凭据</p>
         </div>
 
         <a-form
@@ -27,6 +27,18 @@
                 {{ endpoint.label }} · {{ endpoint.value }}
               </a-select-option>
             </a-select>
+          </a-form-item>
+
+          <a-form-item label="用户名" name="username">
+            <a-input
+              v-model:value="formState.username"
+              size="large"
+              name="username"
+              autocomplete="username"
+              placeholder="admin"
+            >
+              <template #prefix><UserOutlined /></template>
+            </a-input>
           </a-form-item>
 
           <a-form-item label="密码" name="password">
@@ -67,6 +79,7 @@ import {
   ArrowLeftOutlined,
   LockOutlined,
   LoginOutlined,
+  UserOutlined,
 } from '@ant-design/icons-vue'
 import AppHeader from '../components/AppHeader.vue'
 import { apiEndpoints } from '../data/admin'
@@ -77,12 +90,14 @@ defineEmits<{ 'toggle-theme': [] }>()
 const submitting = ref(false)
 const formState = reactive({
   apiEndpoint: apiEndpoints[0]!.value,
+  username: '',
   password: '',
   turnstileVerified: true,
 })
 
 const rules: Record<string, Rule[]> = {
   apiEndpoint: [{ required: true, message: '请选择管理站点', trigger: 'change' }],
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
