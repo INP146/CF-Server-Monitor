@@ -2,7 +2,7 @@
 
 一个基于 Cloudflare Workers + D1 + Durable Objects 的多服务器监控探针系统，支持实时监控、历史数据查看、延迟追踪、地图展示等功能。兼容主流 Linux 系统、Alpine Linux、OpenWrt、macOS（Intel / Apple Silicon）、群晖、Windows 系统。
 
-**当前 Workers 版本：3.0.0-beta.1；Agent 版本：1.3.4**
+**当前 Workers 版本：3.0.0-beta.2；Agent 版本：1.3.4**
 
 为兼容 2.x 已安装节点，系统服务名 `cf-probe`、配置目录及 Windows 脚本文件名
 `cf-server-monitor.ps1` 暂时保持不变；这些标识不代表旧产品仍在并行运行。

@@ -378,7 +378,7 @@ CORS_ALLOWED_ORIGINS=https://status.example.com,https://admin.example.com
 
 ```json
 {
-  "version": "3.0.0-beta.1",
+  "version": "3.0.0-beta.2",
   "is_public": true,
   "authorization": false,
   "turnstile_enabled": true,
@@ -1672,9 +1672,10 @@ curl -X POST https://status.example.com/admin/api \
 
 ## 9. 版本与变更说明
 
+- **2026-07-28**：文档基线更新为 EdgeProbe `3.0.0-beta.2`。
 - **2026-07-27**：文档基线更新为 EdgeProbe `3.0.0-beta.1`，Agent 版本更新为 `1.3.4`；同步项目更名、Workers TypeScript 迁移及主题功能移除后的接口实现。
 - **2026-07-26**：重新同步 `main` 源码；当前 Workers 版本为 `2.8.0 Beta`，Agent 版本为 `1.3.2`。补充最新批次缓存、测试通知、服务器导入/导出及探针动态配置，修正鉴权、历史查询、WebSocket、数据库维护和数据结构说明。
-- ~~**v1.x**：当前文档对应早期 `src/index.ts`、`src/handlers/*`、`src/database/schema.ts` 主线实现。~~ **2026-07-26 修订**：文档更新至 `2.8.0 Beta`；**2026-07-27 修订**：文档现以 EdgeProbe `3.0.0-beta.1` 的发布候选实现为准。
+- ~~**v1.x**：当前文档对应早期 `src/index.ts`、`src/handlers/*`、`src/database/schema.ts` 主线实现。~~ **2026-07-26 修订**：文档更新至 `2.8.0 Beta`；**2026-07-27 修订**：文档更新至 EdgeProbe `3.0.0-beta.1`；**2026-07-28 修订**：文档现以 EdgeProbe `3.0.0-beta.2` 的发布候选实现为准。
 - **Breaking change**：`/admin/api` 由 `GET?action=...` 改为 `POST {action:...}` 模式，Token 校验与 Turnstile 走 Header 通道。
 - **CORS**：普通 HTTP 响应通过 `CORS_ALLOWED_ORIGINS` 环境变量开启跨域；不配置时浏览器跨域读取会失败。WebSocket 握手的特殊行为见 [§0.6](#06-cors)。
 - **JWT**：~~未配置 `jwt_secret` 时直接回退到 `API_SECRET` 派生值。~~ **2026-07-26 修订**：加载设置时会生成并持久化 32 字节随机密钥；`API_SECRET` 派生值和固定常量只作为数据库加载异常等兜底。

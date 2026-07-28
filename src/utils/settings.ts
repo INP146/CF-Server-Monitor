@@ -1,7 +1,7 @@
 import { isRecord } from '../types/domain.js';
 import type { DataRecord } from '../types/domain.js';
 
-const CURRENT_VERSION = '3.0.0-beta.1';
+const CURRENT_VERSION = '3.0.0-beta.2';
 export const AGENT_VERSION = '1.3.4';
 export const DEFAULT_SITE_TITLE = 'EdgeProbe';
 export const APPEARANCE_FIELDS = ['site_title', 'custom_bg', 'custom_head', 'custom_script', 'csp_static', 'csp_api', 'display_mode'];
