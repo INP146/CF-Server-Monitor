@@ -1,5 +1,15 @@
 import { getApiBases } from './config'
 import { STORAGE } from './constants'
+import {
+  AUTH_EXPIRED_EVENT,
+  TURNSTILE_EXPIRED_EVENT,
+  clearAuthTokenForBase,
+  clearTurnstileVerificationForBase,
+  getAuthTokenForBase,
+  getTurnstileVerificationForBase,
+  isAdminLoggedIn,
+  setTurnstileVerificationForBase,
+} from './auth'
 
 const DEFAULT_ERROR_MESSAGES: Record<number, string> = {
   401: 'Unauthorized',
@@ -35,13 +45,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-function redirectToAdminLogin(): void {
-  const currentRoute = window.location.hash.replace(/^#/, '') || '/'
-  const target = `#/admin?redirect=${encodeURIComponent(currentRoute)}`
-  if (window.location.hash.startsWith('#/admin')) return
-  window.location.hash = target
-}
-
 function createHeaders(options: RequestOptions): Headers {
   const {
     includeAuth = true,
@@ -52,7 +55,7 @@ function createHeaders(options: RequestOptions): Headers {
   const headers = new Headers({ 'Content-Type': 'application/json' })
 
   if (includeAuth) {
-    const token = localStorage.getItem(STORAGE.JWT_TOKEN)
+    const token = getAuthTokenForBase(options.baseUrl || getApiBases()[0]!)
     if (token) headers.set('Authorization', `Bearer ${token}`)
   }
 
@@ -62,26 +65,31 @@ function createHeaders(options: RequestOptions): Headers {
   }
 
   if (includeTurnstileVerified) {
-    const verified = localStorage.getItem(STORAGE.TURNSTILE_VERIFIED)
+    const verified = getTurnstileVerificationForBase(options.baseUrl || getApiBases()[0]!)
     if (verified) headers.set('X-Turnstile-Verified', verified)
   }
 
   return headers
 }
 
+function dispatchSessionEvent(name: string, baseUrl: string): void {
+  window.dispatchEvent(new CustomEvent(name, { detail: { baseUrl } }))
+}
+
 async function handleResponse<T>(response: Response, options: RequestOptions): Promise<Omit<ApiResult<T>, 'baseUrl'>> {
   const { autoRedirect = true } = options
+  const baseUrl = options.baseUrl || getApiBases()[0]!
 
   if (response.status === 401) {
-    localStorage.removeItem(STORAGE.JWT_TOKEN)
-    if (autoRedirect) redirectToAdminLogin()
+    clearAuthTokenForBase(baseUrl)
+    if (autoRedirect) dispatchSessionEvent(AUTH_EXPIRED_EVENT, baseUrl)
     return { error: DEFAULT_ERROR_MESSAGES[401], status: response.status }
   }
 
   if (response.status === 403) {
     localStorage.removeItem(STORAGE.TURNSTILE_TOKEN)
-    localStorage.removeItem(STORAGE.TURNSTILE_VERIFIED)
-    if (autoRedirect) window.location.reload()
+    clearTurnstileVerificationForBase(baseUrl)
+    if (autoRedirect) dispatchSessionEvent(TURNSTILE_EXPIRED_EVENT, baseUrl)
     return { error: DEFAULT_ERROR_MESSAGES[403], status: response.status }
   }
 
@@ -109,7 +117,7 @@ async function handleResponse<T>(response: Response, options: RequestOptions): P
     const data = await response.json() as T
     const record = asRecord(data)
     if (typeof record?.turnstile_verified === 'string' && record.turnstile_verified) {
-      localStorage.setItem(STORAGE.TURNSTILE_VERIFIED, record.turnstile_verified)
+      setTurnstileVerificationForBase(baseUrl, record.turnstile_verified)
       localStorage.removeItem(STORAGE.TURNSTILE_TOKEN)
     }
     return { data, status: response.status }
@@ -120,14 +128,15 @@ async function handleResponse<T>(response: Response, options: RequestOptions): P
 
 async function request<T>(method: string, url: string, body: unknown, options: RequestOptions = {}): Promise<ApiResult<T>> {
   const baseUrl = options.baseUrl || getApiBases()[0]!
+  const resolvedOptions = { ...options, baseUrl }
   try {
     const response = await fetch(`${baseUrl}${url}`, {
       method,
-      headers: createHeaders(options),
+      headers: createHeaders(resolvedOptions),
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: 'include',
     })
-    return { ...await handleResponse<T>(response, options), baseUrl }
+    return { ...await handleResponse<T>(response, resolvedOptions), baseUrl }
   } catch (error) {
     return {
       error: error instanceof Error ? error.message : 'Network error',
@@ -185,4 +194,4 @@ export const http = {
   },
 }
 
-export const isAdminLoggedIn = (): boolean => Boolean(localStorage.getItem(STORAGE.JWT_TOKEN))
+export { isAdminLoggedIn }

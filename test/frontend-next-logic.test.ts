@@ -2,11 +2,22 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import { computeDashboardStats } from '../src/frontend-next/composables/useDashboard'
+import {
+  clearAuthToken,
+  getAuthToken,
+  getTurnstileVerification,
+  isAdminLoggedIn,
+  normalizeApiIndex,
+  setAuthToken,
+  setTurnstileVerificationForBase,
+} from '../src/frontend-next/utils/auth'
 import * as dashboardApi from '../src/frontend-next/utils/api'
 import { createEmptyMergedData, mergeSiteResult } from '../src/frontend-next/utils/api'
 import { normalizeDashboardView, normalizeDisplayMode } from '../src/frontend-next/utils/display-mode'
 import { formatBytes } from '../src/frontend-next/utils/format'
 import { resolvePlaybackCursor } from '../src/frontend-next/utils/playback'
+import { setApiBases } from '../src/frontend-next/utils/config'
+import { getPostLoginTarget, normalizeInternalRedirect, withApiIndex } from '../src/frontend-next/utils/routing'
 import { validatePingNode } from '../src/frontend-next/utils/ping-node'
 import {
   detectBillingCycle,
@@ -47,6 +58,59 @@ test('keeps every legacy dashboard API export available', () => {
   for (const exportName of expectedExports) {
     assert.equal(typeof dashboardApi[exportName as keyof typeof dashboardApi], 'function', exportName)
   }
+})
+
+test('isolates admin sessions by API site and migrates the legacy first-site token', () => {
+  const values = new Map<string, string>()
+  const storage = {
+    get length() { return values.size },
+    clear: () => values.clear(),
+    getItem: (key: string) => values.get(key) ?? null,
+    key: (index: number) => [...values.keys()][index] ?? null,
+    removeItem: (key: string) => { values.delete(key) },
+    setItem: (key: string, value: string) => { values.set(key, String(value)) },
+  }
+  const previousWindow = globalThis.window
+  const previousStorage = globalThis.localStorage
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: { location: { protocol: 'https:', host: 'app.example.com', origin: 'https://app.example.com' } },
+  })
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage })
+
+  try {
+    setApiBases(['https://one.example.com', 'https://two.example.com'])
+    storage.setItem('jwt_token', 'legacy-token')
+    assert.equal(getAuthToken(0), 'legacy-token')
+    assert.equal(storage.getItem('jwt_token'), null)
+
+    setAuthToken('second-token', 1)
+    assert.equal(getAuthToken(0), 'legacy-token')
+    assert.equal(getAuthToken(1), 'second-token')
+    assert.equal(isAdminLoggedIn(1), true)
+    assert.equal(normalizeApiIndex('99'), 0)
+
+    setTurnstileVerificationForBase('https://one.example.com', 'first-verification')
+    setTurnstileVerificationForBase('https://two.example.com', 'second-verification')
+    assert.equal(getTurnstileVerification(0), 'first-verification')
+    assert.equal(getTurnstileVerification(1), 'second-verification')
+
+    clearAuthToken(1)
+    assert.equal(isAdminLoggedIn(1), false)
+    assert.equal(isAdminLoggedIn(0), true)
+  } finally {
+    setApiBases(['https://app.example.com'])
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: previousWindow })
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previousStorage })
+  }
+})
+
+test('keeps authentication redirects internal and bound to the selected API site', () => {
+  assert.equal(getPostLoginTarget('/server/node-1?range=24#chart', 1), '/server/node-1?range=24&api=1#chart')
+  assert.equal(getPostLoginTarget('/admin/panel?api=0', 2), '/admin/panel?api=2')
+  assert.equal(getPostLoginTarget('//evil.example/path', 1), '/admin/panel?api=1')
+  assert.equal(normalizeInternalRedirect('/admin'), '/admin/panel')
+  assert.equal(withApiIndex('/admin/panel?tab=settings', 3), '/admin/panel?tab=settings&api=3')
 })
 
 test('normalizes timestamps and formats byte values', () => {

@@ -16,7 +16,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AButton from 'ant-design-vue/es/button'
 import AConfigProvider from 'ant-design-vue/es/config-provider'
@@ -24,6 +24,7 @@ import AResult from 'ant-design-vue/es/result'
 import ASpin from 'ant-design-vue/es/spin'
 import antTheme from 'ant-design-vue/es/theme'
 import { http } from './utils/http'
+import { TURNSTILE_EXPIRED_EVENT } from './utils/auth'
 import {
   clearTurnstileToken,
   fetchAllTurnstileConfigs,
@@ -37,6 +38,8 @@ const isDark = ref(window.localStorage.getItem('edgeprobe-theme') === 'dark')
 const route = useRoute()
 const accessState = ref<'loading' | 'ready' | 'error'>('loading')
 const accessError = ref('')
+let appMounted = false
+let accessRun = 0
 
 function toggleTheme() {
   isDark.value = !isDark.value
@@ -57,6 +60,7 @@ const themeConfig = computed(() => ({
 }))
 
 async function initializeAccess() {
+  const currentRun = ++accessRun
   accessState.value = 'loading'
   accessError.value = ''
   if (route.path.startsWith('/admin')) {
@@ -67,6 +71,7 @@ async function initializeAccess() {
   try {
     const results = await fetchAllTurnstileConfigs()
     const enabledSites = getTurnstileEnabledSites(results, 'global')
+    if (currentRun !== accessRun) return
     if (!enabledSites.length || enabledSites.every((site) => site.verified)) {
       accessState.value = 'ready'
       return
@@ -78,17 +83,20 @@ async function initializeAccess() {
     const site = enabledSites[0]!
     await loadTurnstileScript()
     await nextTick()
+    if (currentRun !== accessRun) return
     if (!window.turnstile) throw new Error('Turnstile 脚本加载失败')
 
     window.turnstile.render('#global-turnstile-container', {
       sitekey: site.siteKey,
       callback: async (token) => {
+        if (currentRun !== accessRun) return
         setTurnstileToken(token)
         const verification = await http.getByIndex<{ verified?: boolean }>('/api/config', site.index, {
           includeAuth: true,
           includeTurnstile: true,
           autoRedirect: false,
         })
+        if (currentRun !== accessRun) return
         if (!verification.error && verification.data?.verified === true) accessState.value = 'ready'
         else {
           clearTurnstileToken()
@@ -97,11 +105,17 @@ async function initializeAccess() {
         }
       },
       errorCallback: () => {
+        if (currentRun !== accessRun) return
         clearTurnstileToken()
         accessError.value = '安全验证组件加载失败'
         accessState.value = 'error'
       },
-      expiredCallback: clearTurnstileToken,
+      expiredCallback: () => {
+        if (currentRun !== accessRun) return
+        clearTurnstileToken()
+        accessError.value = '安全验证已过期，请重试'
+        accessState.value = 'error'
+      },
     })
   } catch (error) {
     accessError.value = error instanceof Error ? error.message : '访问权限检查失败'
@@ -109,5 +123,20 @@ async function initializeAccess() {
   }
 }
 
-onMounted(() => { void initializeAccess() })
+const handleTurnstileExpired = () => {
+  if (!route.path.startsWith('/admin')) void initializeAccess()
+}
+
+watch(() => route.path.startsWith('/admin'), () => {
+  if (appMounted) void initializeAccess()
+})
+onMounted(() => {
+  appMounted = true
+  window.addEventListener(TURNSTILE_EXPIRED_EVENT, handleTurnstileExpired)
+  void initializeAccess()
+})
+onBeforeUnmount(() => {
+  appMounted = false
+  window.removeEventListener(TURNSTILE_EXPIRED_EVENT, handleTurnstileExpired)
+})
 </script>

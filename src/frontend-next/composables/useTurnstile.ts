@@ -82,7 +82,7 @@ export function useTurnstile() {
         const required = turnstileEnabled.value || turnstileLoginEnabled.value
         turnstileSiteKey.value = required ? String(config.turnstile_site_key || '') : ''
         turnstileVerified.value = turnstileEnabled.value
-          && (config.verified === true || hasSharedTurnstileVerified())
+          && (config.verified === true || hasSharedTurnstileVerified(apiIndex))
 
         if (turnstileSiteKey.value
           && (turnstileLoginEnabled.value || (turnstileEnabled.value && !turnstileVerified.value))) {

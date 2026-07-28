@@ -16,6 +16,7 @@ import { getApiBases, getTitle, getWsBase, hasMultipleApiBases } from './config'
 import { DEFAULT_SITE_TITLE, STORAGE } from './constants'
 import { resolveDisplayMode } from './display-mode'
 import { http, isAdminLoggedIn, type ApiResult } from './http'
+import { clearAuthToken, setAuthToken } from './auth'
 import { createLiveSocket } from './live-socket'
 
 export { formatBytes, getFlagRegionCode, isServerOnline } from './format'
@@ -188,13 +189,13 @@ export async function login(
   }, apiIndex, { autoRedirect: false })
 
   if (!result.error && result.data?.token) {
-    localStorage.setItem(STORAGE.JWT_TOKEN, result.data.token)
+    setAuthToken(result.data.token, apiIndex)
   }
   return result
 }
 
-export function logout(): void {
-  localStorage.removeItem(STORAGE.JWT_TOKEN)
+export function logout(apiIndex = 0): void {
+  clearAuthToken(apiIndex)
 }
 
 export async function fetchConfig(apiIndex = 0): Promise<SiteConfigResponse | null> {

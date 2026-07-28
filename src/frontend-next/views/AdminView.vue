@@ -38,7 +38,7 @@
           <a-table class="admin-table" :columns="columns" :data-source="filteredServers" :row-selection="rowSelection" :pagination="{ pageSize: 8, hideOnSinglePage: true }" :scroll="{ x: 1540 }" :loading="refreshing" row-key="id" size="middle">
             <template #bodyCell="{ column, record }">
               <template v-if="column.key === 'sort'"><div class="sort-actions"><a-button type="text" size="small" aria-label="上移" @click="moveServer(record.id, -1)"><template #icon><ArrowUpOutlined /></template></a-button><a-button type="text" size="small" aria-label="下移" @click="moveServer(record.id, 1)"><template #icon><ArrowDownOutlined /></template></a-button></div></template>
-              <template v-else-if="column.key === 'name'"><a :href="`#/server/${record.id}`" class="admin-server-name"><img :src="`/flags/${record.region}.svg`" alt="" /><span><strong>{{ record.name }}</strong><small>{{ record.id }}</small></span></a></template>
+              <template v-else-if="column.key === 'name'"><a :href="adminDetailHref(record.id)" class="admin-server-name"><img :src="`/flags/${record.region}.svg`" alt="" /><span><strong>{{ record.name }}</strong><small>{{ record.id }}</small></span></a></template>
               <template v-else-if="column.key === 'group'"><a-tag>{{ record.group }}</a-tag></template>
               <template v-else-if="column.key === 'tags'"><span class="compact-tags"><a-tag v-for="tag in record.tags" :key="tag" color="blue">{{ tag }}</a-tag></span></template>
               <template v-else-if="column.key === 'note'"><a-tooltip title="双击复制"><span class="note-cell" @dblclick="copyNote(record.note)">{{ record.note || '-' }}</span></a-tooltip></template>
@@ -173,7 +173,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import AAlert from 'ant-design-vue/es/alert'
 import AButton from 'ant-design-vue/es/button'
 import ABadge from 'ant-design-vue/es/badge'
@@ -210,6 +210,7 @@ import {
   type AdminUsageResponse,
 } from '../utils/admin-api'
 import { clearHistory, logout as apiLogout, upgradeDatabase } from '../utils/api'
+import { normalizeApiIndex } from '../utils/auth'
 import { getApiBases } from '../utils/config'
 import { BILLING_CYCLES } from '../utils/server'
 
@@ -217,10 +218,12 @@ defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
 
 const activeTab = ref('servers')
+const route = useRoute()
 const router = useRouter()
 const apiBases = getApiBases()
 const apiEndpoints = apiBases.map((value, index) => ({ label: apiBases.length > 1 ? `站点 ${index + 1}` : '当前站点', value }))
-const apiEndpoint = ref(apiEndpoints[0]!.value)
+const initialApiIndex = normalizeApiIndex(route.query.api)
+const apiEndpoint = ref(apiEndpoints[initialApiIndex]?.value ?? apiEndpoints[0]!.value)
 const apiIndex = computed(() => Math.max(0, apiBases.indexOf(apiEndpoint.value)))
 const apiSecret = ref('')
 const search = ref('')
@@ -301,6 +304,7 @@ async function loadAdmin() {
 }
 
 function openCreateModal() { editingServer.value = null; serverModalOpen.value = true }
+function adminDetailHref(id: string) { return `#/server/${encodeURIComponent(id)}?api=${apiIndex.value}` }
 function openEditModal(server: ManagedServer | Record<string, unknown>) { editingServer.value = server as ManagedServer; serverModalOpen.value = true }
 function openCommandModal(server: ManagedServer | Record<string, unknown>) { commandServer.value = server as ManagedServer; commandModalOpen.value = true }
 function openDeleteModal(server: ManagedServer | Record<string, unknown>) { deletingServer.value = server as ManagedServer; deleteModalOpen.value = true }
@@ -486,10 +490,21 @@ async function runDatabaseAction(action: 'upgrade' | 'clear') {
 }
 
 function logout() {
-  apiLogout()
-  void router.replace('/admin')
+  apiLogout(apiIndex.value)
+  void router.replace({ name: 'login', query: { api: String(apiIndex.value) } })
 }
 
-watch(apiEndpoint, () => { void loadAdmin() })
+watch(apiEndpoint, async (value) => {
+  const nextIndex = Math.max(0, apiBases.indexOf(value))
+  if (String(route.query.api ?? '') === String(nextIndex)) return
+  await router.replace({ name: 'admin', query: { ...route.query, api: String(nextIndex) } })
+})
+watch(() => route.query.api, async (value) => {
+  const nextIndex = normalizeApiIndex(value)
+  const nextEndpoint = apiEndpoints[nextIndex]?.value ?? apiEndpoints[0]!.value
+  if (apiEndpoint.value !== nextEndpoint) apiEndpoint.value = nextEndpoint
+  feedback.value = null
+  await loadAdmin()
+})
 onMounted(() => { void loadAdmin() })
 </script>

@@ -86,8 +86,10 @@ import {
 import AppHeader from '../components/AppHeader.vue'
 import { useTurnstile } from '../composables/useTurnstile'
 import { login } from '../utils/api'
+import { normalizeApiIndex } from '../utils/auth'
 import { getApiBases } from '../utils/config'
 import { http } from '../utils/http'
+import { getPostLoginTarget } from '../utils/routing'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
@@ -98,8 +100,9 @@ const route = useRoute()
 const router = useRouter()
 const bases = getApiBases()
 const apiEndpoints = bases.map((value, index) => ({ label: bases.length > 1 ? `站点 ${index + 1}` : '当前站点', value }))
+const initialApiIndex = normalizeApiIndex(route.query.api)
 const formState = reactive({
-  apiEndpoint: apiEndpoints[0]!.value,
+  apiEndpoint: apiEndpoints[initialApiIndex]?.value ?? apiEndpoints[0]!.value,
   username: '',
   password: '',
 })
@@ -156,7 +159,7 @@ async function submitLogin() {
     return
   }
   clearTurnstile()
-  await router.replace(String(route.query.redirect || '/admin/panel'))
+  await router.replace(getPostLoginTarget(route.query.redirect, apiIndex))
 }
 
 async function setupTurnstile() {
@@ -169,7 +172,13 @@ async function setupTurnstile() {
   }
 }
 
-watch(() => formState.apiEndpoint, () => { void setupTurnstile() })
+watch(() => formState.apiEndpoint, async () => {
+  const apiIndex = Math.max(0, bases.indexOf(formState.apiEndpoint))
+  if (String(route.query.api ?? '') !== String(apiIndex)) {
+    await router.replace({ name: 'login', query: { ...route.query, api: String(apiIndex) } })
+  }
+  await setupTurnstile()
+})
 onMounted(() => { void setupTurnstile() })
 onBeforeUnmount(() => removeTurnstile('#admin-turnstile-container'))
 </script>

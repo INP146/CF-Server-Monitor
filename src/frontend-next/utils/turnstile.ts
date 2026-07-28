@@ -1,5 +1,6 @@
 import type { ApiResult } from './http'
 import { http } from './http'
+import { getTurnstileVerification } from './auth'
 import { STORAGE } from './constants'
 
 export interface TurnstileConfig extends Record<string, unknown> {
@@ -47,7 +48,7 @@ export function setTurnstileToken(token: string): void {
 
 export const getTurnstileToken = (): string => localStorage.getItem(STORAGE.TURNSTILE_TOKEN) || ''
 export const clearTurnstileToken = (): void => localStorage.removeItem(STORAGE.TURNSTILE_TOKEN)
-export const hasSharedTurnstileVerified = (): boolean => Boolean(localStorage.getItem(STORAGE.TURNSTILE_VERIFIED))
+export const hasSharedTurnstileVerified = (apiIndex = 0): boolean => Boolean(getTurnstileVerification(apiIndex))
 
 export function getTurnstileEnabledSites(
   results: readonly ApiResult<TurnstileConfig>[],

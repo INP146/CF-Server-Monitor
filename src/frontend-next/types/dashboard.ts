@@ -99,6 +99,12 @@ export interface SiteConfigResponse extends Partial<DashboardConfig> {
   version?: string
   last_workers_version?: string
   last_agent_version?: string
+  authorization?: boolean
+  is_public?: boolean
+  turnstile_enabled?: boolean | string
+  turnstile_login_enabled?: boolean | string
+  turnstile_site_key?: string
+  verified?: boolean
 }
 
 export interface HistoryRecord extends Record<string, unknown> {
