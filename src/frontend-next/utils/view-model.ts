@@ -33,7 +33,7 @@ const normalizedLoad = (value: unknown): string => {
   return parts.length ? parts.join(' / ') : '- / - / -'
 }
 
-export function toDisplayServer(server: DashboardServer, now = Date.now(), apiIndex?: number): MockServer {
+export function toDisplayServer(server: DashboardServer, now = Date.now(), apiIndex?: number, language: 'zh' | 'en' = 'zh'): MockServer {
   const online = typeof server.is_online === 'boolean'
     ? server.is_online
     : isServerOnline(server, now)
@@ -59,14 +59,14 @@ export function toDisplayServer(server: DashboardServer, now = Date.now(), apiIn
     download: online ? `${formatBytes(server.net_in_speed)}/s` : '0 B/s',
     upload: online ? `${formatBytes(server.net_out_speed)}/s` : '0 B/s',
     latency: online ? firstPositive(server.ping_ct, server.ping_cu, server.ping_cm, server.ping_bd) : null,
-    uptime: online ? formatUptime(server.boot_time, now) : '-',
+    uptime: online ? formatUptime(server.boot_time, now, language) : '-',
     load: online ? normalizedLoad(server.load_avg) : '- / - / -',
     tags: stringList(server.tags),
     group: String(server.server_group || 'Default'),
-    priceText: formatBillingPrice(server),
+    priceText: formatBillingPrice(server, language),
     expireDate: String(server.expire_date || ''),
     trafficUsed: formatBytes(getTrafficUsageBytes(server)),
-    trafficLimitText: toNumber(server.traffic_limit) > 0 ? `${server.traffic_limit} GB` : '不限',
+    trafficLimitText: toNumber(server.traffic_limit) > 0 ? `${server.traffic_limit} GB` : language === 'zh' ? '不限' : 'Unlimited',
     trafficPercent: calcTrafficUsagePercent(server),
     dataTime: formatServerDataTime(server, online),
     apiIndex,

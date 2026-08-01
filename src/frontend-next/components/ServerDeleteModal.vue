@@ -1,10 +1,10 @@
 <template>
-  <a-modal v-model:open="open" title="删除服务器" ok-text="确认删除" cancel-text="取消" ok-type="danger" @ok="server && $emit('confirm', server.id)">
+  <a-modal v-model:open="open" :title="t('deleteServer')" :ok-text="t('confirmDelete')" :cancel-text="t('cancel')" ok-type="danger" @ok="server && $emit('confirm', server.id)">
     <template v-if="server">
-      <a-alert type="warning" show-icon :message="`删除 ${server.name} 后，其历史数据也将不可访问。`" class="delete-alert" />
+      <a-alert type="warning" show-icon :message="t('deleteWarning', { name: server.name })" class="delete-alert" />
       <a-form layout="vertical">
-        <a-form-item label="目标系统"><a-select v-model:value="targetOS" :options="targetOSOptions" /></a-form-item>
-        <a-form-item label="建议先执行卸载命令"><pre class="command-block compact">{{ command }}</pre><a-button block @click="copy"><template #icon><CopyOutlined /></template>{{ copied ? '已复制' : '复制卸载命令' }}</a-button></a-form-item>
+        <a-form-item :label="t('targetSystem')"><a-select v-model:value="targetOS" :options="localizedTargetOSOptions" /></a-form-item>
+        <a-form-item :label="t('uninstallFirst')"><pre class="command-block compact">{{ command }}</pre><a-button block @click="copy"><template #icon><CopyOutlined /></template>{{ copied ? t('copied') : t('copyUninstall') }}</a-button></a-form-item>
       </a-form>
     </template>
   </a-modal>
@@ -19,12 +19,16 @@ import AModal from 'ant-design-vue/es/modal'
 import ASelect from 'ant-design-vue/es/select'
 import { CopyOutlined } from '@ant-design/icons-vue'
 import type { ManagedServer, TargetOS } from '../data/admin'
-import { buildUninstallCommand, targetOSOptions } from '../utils/mock-admin'
+import { buildUninstallCommand } from '../utils/mock-admin'
+import { t } from '../utils/i18n'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ server: ManagedServer | null; apiBase: string }>()
 defineEmits<{ confirm: [id: string] }>()
 const targetOS = ref<TargetOS>('linux')
+const localizedTargetOSOptions = computed(() => [
+  { label: t('linuxAuto'), value: 'linux' }, { label: t('macPlatform'), value: 'mac' }, { label: t('windows'), value: 'windows' },
+])
 const copied = ref(false)
 const command = computed(() => props.server ? buildUninstallCommand(props.server, targetOS.value, props.apiBase) : '')
 watch([open, targetOS], () => { copied.value = false })

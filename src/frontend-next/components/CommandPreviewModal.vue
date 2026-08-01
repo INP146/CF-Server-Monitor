@@ -1,17 +1,17 @@
 <template>
-  <a-modal v-model:open="open" title="安装命令" width="720px" :footer="null">
+  <a-modal v-model:open="open" :title="t('commandTitle')" width="720px" :footer="null">
     <template v-if="server">
-      <div class="command-modal-head"><span><strong>{{ server.name }}</strong><small>{{ server.id }}</small></span><a-select v-model:value="targetOS" :options="targetOSOptions" /></div>
+      <div class="command-modal-head"><span><strong>{{ server.name }}</strong><small>{{ server.id }}</small></span><a-select v-model:value="targetOS" :options="localizedTargetOSOptions" /></div>
       <a-descriptions bordered size="small" :column="2" class="command-config">
-        <a-descriptions-item label="采集间隔">{{ server.collectInterval }} 秒</a-descriptions-item>
-        <a-descriptions-item label="上报间隔">{{ server.reportInterval }} 秒</a-descriptions-item>
-        <a-descriptions-item label="流量重置">每月 {{ server.resetDay }} 日</a-descriptions-item>
-        <a-descriptions-item label="自动更新">{{ server.autoUpdate ? '启用' : '关闭' }}</a-descriptions-item>
-        <a-descriptions-item label="下行修正">{{ correctionText(server.rxCorrection) }}</a-descriptions-item>
-        <a-descriptions-item label="上行修正">{{ correctionText(server.txCorrection) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('collectInterval')">{{ t('seconds', { count: server.collectInterval }) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('reportInterval')">{{ t('seconds', { count: server.reportInterval }) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('trafficReset')">{{ t('monthlyDay', { day: server.resetDay }) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('autoUpdate')">{{ server.autoUpdate ? t('enabled') : t('disabled') }}</a-descriptions-item>
+        <a-descriptions-item :label="t('rxCorrection')">{{ correctionText(server.rxCorrection) }}</a-descriptions-item>
+        <a-descriptions-item :label="t('txCorrection')">{{ correctionText(server.txCorrection) }}</a-descriptions-item>
       </a-descriptions>
       <pre class="command-block">{{ command }}</pre>
-      <div class="command-modal-actions"><a-button @click="$emit('edit', server)"><template #icon><EditOutlined /></template>编辑参数</a-button><a-button type="primary" @click="copy"><template #icon><CopyOutlined /></template>{{ copied ? '已复制' : '复制命令' }}</a-button></div>
+      <div class="command-modal-actions"><a-button @click="$emit('edit', server)"><template #icon><EditOutlined /></template>{{ t('editParameters') }}</a-button><a-button type="primary" @click="copy"><template #icon><CopyOutlined /></template>{{ copied ? t('copied') : t('copyCommand') }}</a-button></div>
     </template>
   </a-modal>
 </template>
@@ -24,15 +24,19 @@ import AModal from 'ant-design-vue/es/modal'
 import ASelect from 'ant-design-vue/es/select'
 import { CopyOutlined, EditOutlined } from '@ant-design/icons-vue'
 import type { ManagedServer, TargetOS } from '../data/admin'
-import { buildInstallCommand, targetOSOptions } from '../utils/mock-admin'
+import { buildInstallCommand } from '../utils/mock-admin'
+import { t } from '../utils/i18n'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ server: ManagedServer | null; apiBase: string; apiSecret: string }>()
 defineEmits<{ edit: [server: ManagedServer] }>()
 const targetOS = ref<TargetOS>('linux')
+const localizedTargetOSOptions = computed(() => [
+  { label: t('linuxAuto'), value: 'linux' }, { label: t('macPlatform'), value: 'mac' }, { label: t('windows'), value: 'windows' },
+])
 const copied = ref(false)
 const command = computed(() => props.server ? buildInstallCommand(props.server, targetOS.value, props.apiBase, props.apiSecret) : '')
 watch([open, targetOS], () => { copied.value = false })
-function correctionText(value: number | null) { return value === null ? '未设置' : `${value} GB` }
+function correctionText(value: number | null) { return value === null ? t('unset') : `${value} GB` }
 async function copy() { await navigator.clipboard?.writeText(command.value); copied.value = true }
 </script>

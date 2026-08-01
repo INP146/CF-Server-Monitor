@@ -57,6 +57,8 @@ a.ant-btn:active {
 
 .app-shell {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--text);
   background: var(--layout-bg);
 }
@@ -73,6 +75,7 @@ a.ant-btn:active {
 }
 
 .dashboard-main {
+  flex: 1;
   min-width: 0;
 }
 
@@ -593,12 +596,15 @@ a.ant-btn:active {
 .login-page {
   min-height: 100vh;
   position: relative;
+  display: flex;
+  flex-direction: column;
   color: var(--text);
   background: var(--layout-bg);
 }
 
 .login-panel {
-  min-height: calc(100vh - 64px);
+  min-height: calc(100vh - 108px);
+  flex: 1;
   padding: 24px;
   display: flex;
   align-items: center;
@@ -642,6 +648,8 @@ a.ant-btn:active {
 
 .admin-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--text);
   background: var(--layout-bg);
 }
@@ -663,6 +671,7 @@ a.ant-btn:active {
 }
 
 .admin-content {
+  flex: 1;
   width: min(100%, 1440px);
   margin: 0 auto;
   padding: 20px 28px 32px;
@@ -906,11 +915,14 @@ a.ant-btn:active {
 
 .detail-page {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   color: var(--text);
   background: var(--layout-bg);
 }
 
 .detail-content {
+  flex: 1;
   width: min(100%, 1440px);
   margin: 0 auto;
   padding: 28px;
@@ -1758,4 +1770,26 @@ a.ant-btn:active {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+.app-footer {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px clamp(16px, 4vw, 48px);
+  border-top: 1px solid var(--border, #e5e7eb);
+  color: var(--text-muted, #6b7280);
+  font-size: 12px;
+}
+
+.app-footer a { color: inherit; }
+.app-version { display: inline-flex; align-items: center; gap: 7px; }
+.app-version.has-update { color: #d96710; }
+.version-update-dot { width: 7px; height: 7px; border-radius: 50%; background: #f38020; box-shadow: 0 0 0 3px rgb(243 128 32 / 18%); }
+
+@media (max-width: 560px) {
+  .app-footer { align-items: flex-start; flex-direction: column; gap: 4px; }
 }

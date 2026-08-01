@@ -1,7 +1,7 @@
 <template>
   <div class="metric-chart" :class="{ 'is-empty': !hasValues }">
     <template v-if="hasValues">
-      <div v-if="displaySeries.length > 1" class="metric-chart-legend" aria-label="图表图例">
+      <div v-if="displaySeries.length > 1" class="metric-chart-legend" :aria-label="t('chartLegend')">
         <span v-for="item in displaySeries" :key="item.label">
           <i :style="{ background: item.color }" />{{ item.label }}
         </span>
@@ -10,7 +10,7 @@
         <div class="metric-chart-y-axis" aria-hidden="true">
           <span v-for="tick in tickLabels" :key="tick">{{ tick }}</span>
         </div>
-        <svg viewBox="0 0 320 92" preserveAspectRatio="none" role="img" :aria-label="`${title}趋势图`">
+        <svg viewBox="0 0 320 92" preserveAspectRatio="none" role="img" :aria-label="t('trendChart', { title })">
           <line v-for="y in [10, 46, 82]" :key="y" x1="0" :y1="y" x2="320" :y2="y" class="chart-grid-line" />
           <template v-for="item in plottedSeries" :key="item.label">
             <template v-for="(segment, index) in item.segments" :key="`${item.label}-${index}`">
@@ -21,12 +21,13 @@
         </svg>
       </div>
     </template>
-    <span v-else>暂无数据</span>
+    <span v-else>{{ t('noData') }}</span>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { t } from '../utils/i18n'
 
 interface ChartSeries {
   label: string

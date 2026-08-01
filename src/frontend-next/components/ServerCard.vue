@@ -21,9 +21,9 @@
       <div class="server-card-extra">
         <a-badge
           :status="server.status === 'online' ? 'success' : 'error'"
-          :text="server.status === 'online' ? '在线' : '离线'"
+          :text="server.status === 'online' ? t('online') : t('offline')"
         />
-        <a-button type="text" size="small" aria-label="打开节点详情" @click.stop="openDetail">
+        <a-button type="text" size="small" :aria-label="t('openServerDetail')" @click.stop="openDetail">
           <template #icon><RightOutlined /></template>
         </a-button>
       </div>
@@ -40,8 +40,8 @@
     </div>
 
     <div v-if="(config.show_price && server.priceText) || (config.show_expire && server.expireDate)" class="server-commercial-meta">
-      <span v-if="config.show_price && server.priceText">费用 <strong>{{ server.priceText }}</strong></span>
-      <span v-if="config.show_expire && server.expireDate">到期 <strong>{{ server.expireDate }}</strong></span>
+      <span v-if="config.show_price && server.priceText">{{ t('price') }} <strong>{{ server.priceText }}</strong></span>
+      <span v-if="config.show_expire && server.expireDate">{{ t('expiry') }} <strong>{{ server.expireDate }}</strong></span>
     </div>
 
     <div class="metric-bars">
@@ -62,22 +62,22 @@
 
     <div class="network-grid">
       <div>
-        <span><DownloadOutlined /> 下载</span>
+        <span><DownloadOutlined /> {{ t('download') }}</span>
         <strong>{{ server.download }}</strong>
       </div>
       <div>
-        <span><UploadOutlined /> 上传</span>
+        <span><UploadOutlined /> {{ t('upload') }}</span>
         <strong>{{ server.upload }}</strong>
       </div>
       <div>
-        <span><WifiOutlined /> 延迟</span>
-        <strong :class="latencyClass">{{ server.latency === null ? '超时' : `${server.latency} ms` }}</strong>
+        <span><WifiOutlined /> {{ t('latency') }}</span>
+        <strong :class="latencyClass">{{ server.latency === null ? t('timeout') : `${server.latency} ms` }}</strong>
       </div>
     </div>
 
 
     <div v-if="config.show_tf" class="traffic-usage-row">
-      <span>月流量 {{ server.trafficUsed || '0 B' }} / {{ server.trafficLimitText || '不限' }}</span>
+      <span>{{ t('monthlyTraffic') }} {{ server.trafficUsed || '0 B' }} / {{ displayTrafficLimit }}</span>
       <a-progress
         v-if="server.trafficLimitText && server.trafficLimitText !== '不限'"
         :percent="Math.min(100, server.trafficPercent || 0)"
@@ -90,10 +90,10 @@
     <a-divider />
 
     <div class="server-card-foot">
-      <span><ClockCircleOutlined /> 运行 {{ server.uptime }}</span>
-      <span>负载 {{ server.load }}</span>
+      <span><ClockCircleOutlined /> {{ t('runtime') }} {{ server.uptime }}</span>
+      <span>{{ t('load') }} {{ server.load }}</span>
     </div>
-    <div v-if="config.show_time" class="server-data-time">数据时间 {{ server.dataTime || '-' }}</div>
+    <div v-if="config.show_time" class="server-data-time">{{ t('dataTime') }} {{ server.dataTime || '-' }}</div>
   </a-card>
 </template>
 
@@ -118,6 +118,7 @@ import type { MockServer } from '../data/dashboard'
 import type { DashboardConfig } from '../types/dashboard'
 import { getOSImage } from '../utils/os-icon'
 import { DEFAULT_SERVER_CARD_CONFIG } from '../utils/server-card'
+import { t } from '../utils/i18n'
 
 const props = withDefaults(defineProps<{
   server: MockServer
@@ -132,9 +133,12 @@ const router = useRouter()
 
 const metrics = computed(() => [
   { label: 'CPU', value: props.server.cpu },
-  { label: '内存', value: props.server.memory },
-  { label: '磁盘', value: props.server.disk },
+  { label: t('memory'), value: props.server.memory },
+  { label: t('disk'), value: props.server.disk },
 ])
+const displayTrafficLimit = computed(() => props.server.trafficLimitText && props.server.trafficLimitText !== '不限'
+  ? props.server.trafficLimitText
+  : t('unlimited'))
 
 const latencyClass = computed(() => {
   if (props.server.latency === null || props.server.latency >= 180) return 'metric-danger'

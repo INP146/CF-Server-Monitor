@@ -1,11 +1,11 @@
 <template>
   <a-config-provider :theme="themeConfig">
     <main v-if="accessState !== 'ready'" class="access-gate">
-      <a-result v-if="accessState === 'error'" status="error" title="安全验证失败" :sub-title="accessError">
-        <template #extra><a-button type="primary" @click="initializeAccess">重试</a-button></template>
+      <a-result v-if="accessState === 'error'" status="error" :title="t('verificationFailed')" :sub-title="accessError">
+        <template #extra><a-button type="primary" @click="initializeAccess">{{ t('retry') }}</a-button></template>
       </a-result>
       <template v-else>
-        <a-spin size="large" tip="正在检查访问权限" />
+        <a-spin size="large" :tip="t('checkingAccess')" />
         <div id="global-turnstile-container" />
       </template>
     </main>
@@ -23,8 +23,10 @@ import AConfigProvider from 'ant-design-vue/es/config-provider'
 import AResult from 'ant-design-vue/es/result'
 import ASpin from 'ant-design-vue/es/spin'
 import antTheme from 'ant-design-vue/es/theme'
+import { useTheme } from './composables/useTheme'
 import { http } from './utils/http'
 import { TURNSTILE_EXPIRED_EVENT } from './utils/auth'
+import { initLanguage, t } from './utils/i18n'
 import {
   clearTurnstileToken,
   fetchAllTurnstileConfigs,
@@ -34,7 +36,8 @@ import {
   setTurnstileToken,
 } from './utils/turnstile'
 
-const isDark = ref(window.localStorage.getItem('edgeprobe-theme') === 'dark')
+const { resolvedTheme, toggleTheme } = useTheme()
+const isDark = computed(() => resolvedTheme.value === 'dark')
 const route = useRoute()
 const accessState = ref<'loading' | 'ready' | 'error'>('loading')
 const accessError = ref('')
@@ -47,14 +50,6 @@ function removeAccessWidget() {
   try { window.turnstile.remove(accessWidgetId) } catch { /* The widget may already be detached. */ }
   accessWidgetId = null
 }
-
-function toggleTheme() {
-  isDark.value = !isDark.value
-}
-
-watch(isDark, (value) => {
-  window.localStorage.setItem('edgeprobe-theme', value ? 'dark' : 'light')
-})
 
 const themeConfig = computed(() => ({
   algorithm: isDark.value ? antTheme.darkAlgorithm : antTheme.defaultAlgorithm,
@@ -89,11 +84,11 @@ async function initializeAccess() {
       accessState.value = 'ready'
       return
     }
-    if (!site.siteKey) throw new Error(`站点 ${site.index + 1} 未配置 Turnstile Site Key`)
+    if (!site.siteKey) throw new Error(t('siteMissingTurnstileKey', { number: site.index + 1 }))
     await loadTurnstileScript()
     await nextTick()
     if (currentRun !== accessRun) return
-    if (!window.turnstile) throw new Error('Turnstile 脚本加载失败')
+    if (!window.turnstile) throw new Error(t('turnstileScriptFailed'))
 
     accessWidgetId = window.turnstile.render('#global-turnstile-container', {
       sitekey: site.siteKey,
@@ -110,26 +105,26 @@ async function initializeAccess() {
         if (!verification.error && verification.data?.verified === true) void initializeAccess()
         else {
           clearTurnstileToken()
-          accessError.value = verification.message || verification.error || '请重新完成安全验证'
+          accessError.value = verification.message || verification.error || t('redoVerification')
           accessState.value = 'error'
         }
       },
       'error-callback': () => {
         if (currentRun !== accessRun) return
         clearTurnstileToken()
-        accessError.value = '安全验证组件加载失败'
+        accessError.value = t('verificationComponentFailed')
         accessState.value = 'error'
       },
       'expired-callback': () => {
         if (currentRun !== accessRun) return
         clearTurnstileToken()
-        accessError.value = '安全验证已过期，请重试'
+        accessError.value = t('verificationExpired')
         accessState.value = 'error'
       },
     })
   } catch (error) {
     if (currentRun !== accessRun) return
-    accessError.value = error instanceof Error ? error.message : '访问权限检查失败'
+    accessError.value = error instanceof Error ? error.message : t('accessCheckFailed')
     accessState.value = 'error'
   }
 }
@@ -142,6 +137,7 @@ watch(() => route.path.startsWith('/admin'), () => {
   if (appMounted) void initializeAccess()
 })
 onMounted(() => {
+  initLanguage()
   appMounted = true
   window.addEventListener(TURNSTILE_EXPIRED_EVENT, handleTurnstileExpired)
   void initializeAccess()

@@ -1,8 +1,8 @@
 <template>
   <div class="dashboard-map-shell">
-    <div ref="mapElement" class="dashboard-map" aria-label="节点区域地图" />
+    <div ref="mapElement" class="dashboard-map" :aria-label="t('mapLabel')" />
     <a-alert v-if="error" type="error" show-icon :message="error" class="dashboard-map-error">
-      <template #action><a-button size="small" @click="initialize">重试</a-button></template>
+      <template #action><a-button size="small" @click="initialize">{{ t('retry') }}</a-button></template>
     </a-alert>
   </div>
 </template>
@@ -12,6 +12,7 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AAlert from 'ant-design-vue/es/alert'
 import AButton from 'ant-design-vue/es/button'
 import { getPublicAssetUrl } from '../utils/config'
+import { t } from '../utils/i18n'
 
 type LeafletLayer = { addTo: (target: LeafletMap | LeafletLayer) => LeafletLayer }
 type LeafletMap = {
@@ -71,7 +72,7 @@ function loadLeafletStylesheet(): Promise<void> {
     stylesheet.addEventListener('error', () => {
       stylesheet.dataset.edgeprobeState = 'error'
       stylesheet.remove()
-      reject(new Error('地图样式加载失败'))
+      reject(new Error(t('mapStyleFailed')))
     }, { once: true })
     if (!existing) {
       stylesheet.rel = 'stylesheet'
@@ -100,7 +101,7 @@ function loadLeaflet(): Promise<LeafletApi> {
     const fail = () => {
       script.dataset.edgeprobeState = 'error'
       script.remove()
-      reject(new Error('地图组件加载失败'))
+      reject(new Error(t('mapComponentFailed')))
     }
     script.addEventListener('load', () => {
       script.dataset.edgeprobeState = 'loaded'
@@ -123,7 +124,7 @@ function loadLeaflet(): Promise<LeafletApi> {
 function loadWorld(): Promise<unknown> {
   if (worldPromise) return worldPromise
   const promise = fetch(getPublicAssetUrl('world.zh.json')).then((response) => {
-    if (!response.ok) throw new Error('地图数据加载失败')
+    if (!response.ok) throw new Error(t('mapDataFailed'))
     return response.json()
   })
   worldPromise = promise
@@ -173,7 +174,7 @@ function draw() {
       html: `<span>${count}</span>`,
       iconSize: [28, 28],
     })
-    leaflet.marker(coordinates, { icon }).bindTooltip(`${code} · ${count} 台节点`).addTo(markers)
+    leaflet.marker(coordinates, { icon }).bindTooltip(`${code} · ${t('nodeCount', { count })}`).addTo(markers)
   }
   window.requestAnimationFrame(() => map?.invalidateSize())
 }
@@ -198,7 +199,7 @@ async function initialize() {
     draw()
   } catch (caught) {
     if (currentRun !== initializeRun) return
-    error.value = caught instanceof Error ? caught.message : '地图加载失败'
+    error.value = caught instanceof Error ? caught.message : t('mapLoadFailed')
   }
 }
 
