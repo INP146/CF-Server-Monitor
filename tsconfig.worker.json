@@ -19,6 +19,6 @@
   ],
   "exclude": [
     "src/frontend",
-    "src/frontend-next"
+    "src/frontend-old"
   ]
 }

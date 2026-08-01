@@ -1,14 +1,14 @@
-import { fileURLToPath, URL } from 'node:url'
-import fs from 'node:fs'
-import path from 'node:path'
-
-import vue from '@vitejs/plugin-vue'
 import { defineConfig } from 'vite'
-import { buildBackgroundStyle, injectApiBase, injectTitle, parseCspOrigins, stripCspMeta } from './src/utils/csp.js'
+import vue from '@vitejs/plugin-vue'
+import mkcert from 'vite-plugin-mkcert'
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+import { parseCspOrigins, buildBackgroundStyle, injectTitle, injectApiBase, stripCspMeta } from './src/utils/csp.js'
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const frontendDir = path.resolve(__dirname, 'src/frontend-old')
 const devProxyTarget = process.env.VITE_DEV_PROXY_TARGET || 'https://localhost:8787'
-const rootDir = fileURLToPath(new URL('.', import.meta.url))
-const frontendDir = fileURLToPath(new URL('./src/frontend', import.meta.url))
 
 const createWorkerProxy = () => ({
   target: devProxyTarget,
@@ -18,11 +18,11 @@ const createWorkerProxy = () => ({
 })
 
 function loadEnvFile() {
-  const envPath = path.resolve(rootDir, '.env')
+  const envPath = path.resolve(__dirname, '.env')
   const env = {}
   if (!fs.existsSync(envPath)) return env
-
-  for (const line of fs.readFileSync(envPath, 'utf8').split('\n')) {
+  const content = fs.readFileSync(envPath, 'utf8')
+  for (const line of content.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed || trimmed.startsWith('#')) continue
     const eqIndex = trimmed.indexOf('=')
@@ -39,29 +39,36 @@ function loadEnvFile() {
 
 function envPlugin() {
   const env = loadEnvFile()
-  const apiDomains = [
-    ...parseCspOrigins(env.API_BASE || ''),
-    ...parseCspOrigins(env.CSP_API || ''),
+  const apiBaseRaw = env.API_BASE || ''
+  const cspApiRaw = env.CSP_API || ''
+  const backgroundImage = env.BACKGROUND_IMAGE || ''
+  const title = env.TITLE || ''
+
+  // API_BASE 与 CSP_API 合并，写入运行时 apiBase meta。
+  const rawApiDomains = [
+    ...parseCspOrigins(apiBaseRaw),
+    ...parseCspOrigins(cspApiRaw)
   ]
 
   return {
     name: 'env-inject',
     transformIndexHtml(html) {
-      let transformed = stripCspMeta(html)
-      transformed = injectTitle(transformed, env.TITLE || '')
-      transformed = injectApiBase(transformed, apiDomains)
-      if (env.BACKGROUND_IMAGE) {
-        transformed = transformed.replace('</head>', `${buildBackgroundStyle(env.BACKGROUND_IMAGE)}\n</head>`)
+      html = stripCspMeta(html)
+      html = injectTitle(html, title)
+      html = injectApiBase(html, rawApiDomains)
+      if (backgroundImage) {
+        const bgStyle = buildBackgroundStyle(backgroundImage)
+        html = html.replace('</head>', `${bgStyle}\n</head>`)
       }
-      return transformed
-    },
+      return html
+    }
   }
 }
 
 export default defineConfig({
   root: frontendDir,
-  publicDir: fileURLToPath(new URL('./public', import.meta.url)),
-  plugins: [vue(), envPlugin()],
+  publicDir: path.resolve(__dirname, 'public'),
+  plugins: [vue(), mkcert(), envPlugin()],
   base: process.env.VITE_BASE || '/',
   resolve: {
     alias: {
@@ -69,7 +76,7 @@ export default defineConfig({
     }
   },
   build: {
-    outDir: fileURLToPath(new URL('./dist', import.meta.url)),
+    outDir: path.resolve(__dirname, 'dist-old'),
     assetsDir: 'static',
     emptyOutDir: true,
     rollupOptions: {
@@ -81,7 +88,8 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173,
+    https: true,
+    port: 5174,
     proxy: {
       '/api': createWorkerProxy(),
       '/admin/api': createWorkerProxy(),

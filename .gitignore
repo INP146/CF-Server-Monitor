@@ -42,3 +42,4 @@ Thumbs.db
 .wrangler/
 dist/
 dist-next/
+dist-old/

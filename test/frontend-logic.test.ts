@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { existsSync } from 'node:fs'
 import test from 'node:test'
 
-import { chunkServerIds, computeDashboardStats, serverKey } from '../src/frontend-next/composables/useDashboard'
+import { chunkServerIds, computeDashboardStats, serverKey } from '../src/frontend/composables/useDashboard'
 import {
   clearAuthToken,
   getAuthToken,
@@ -11,31 +11,31 @@ import {
   normalizeApiIndex,
   setAuthToken,
   setTurnstileVerificationForBase,
-} from '../src/frontend-next/utils/auth'
-import * as dashboardApi from '../src/frontend-next/utils/api'
-import { createEmptyMergedData, mergeSiteResult } from '../src/frontend-next/utils/api'
-import { normalizeDashboardView, normalizeDisplayMode } from '../src/frontend-next/utils/display-mode'
-import { formatBytes } from '../src/frontend-next/utils/format'
-import { resolvePlaybackCursor } from '../src/frontend-next/utils/playback'
-import { setApiBases } from '../src/frontend-next/utils/config'
-import { getPostLoginTarget, normalizeInternalRedirect, withApiIndex } from '../src/frontend-next/utils/routing'
-import { validatePingNode } from '../src/frontend-next/utils/ping-node'
+} from '../src/frontend/utils/auth'
+import * as dashboardApi from '../src/frontend/utils/api'
+import { createEmptyMergedData, mergeSiteResult } from '../src/frontend/utils/api'
+import { normalizeDashboardView, normalizeDisplayMode } from '../src/frontend/utils/display-mode'
+import { formatBytes } from '../src/frontend/utils/format'
+import { resolvePlaybackCursor } from '../src/frontend/utils/playback'
+import { setApiBases } from '../src/frontend/utils/config'
+import { getPostLoginTarget, normalizeInternalRedirect, withApiIndex } from '../src/frontend/utils/routing'
+import { validatePingNode } from '../src/frontend/utils/ping-node'
 import {
   detectBillingCycle,
   formatBillingPrice,
   normalizePrice,
   renewExpireDateIfNeeded,
-} from '../src/frontend-next/utils/server'
-import { calcTrafficUsagePercent, formatUptime, getPingColor } from '../src/frontend-next/utils/server-card'
-import { normalizeTimestamp } from '../src/frontend-next/utils/time'
-import { createDefaultSettings, createManagedServers } from '../src/frontend-next/data/admin'
+} from '../src/frontend/utils/server'
+import { calcTrafficUsagePercent, formatUptime, getPingColor } from '../src/frontend/utils/server-card'
+import { normalizeTimestamp } from '../src/frontend/utils/time'
+import { createDefaultSettings, createManagedServers } from '../src/frontend/data/admin'
 import {
   applyAdminSettings,
   toAdminServerPayload,
   toAdminSettingsPayload,
   toManagedServer,
-} from '../src/frontend-next/utils/admin-api'
-import { useTurnstile } from '../src/frontend-next/composables/useTurnstile'
+} from '../src/frontend/utils/admin-api'
+import { useTurnstile } from '../src/frontend/composables/useTurnstile'
 import {
   buildInstallCommand,
   buildUninstallCommand,
@@ -43,18 +43,18 @@ import {
   getInstallerScript,
   parseServerBackup,
   serializeServers,
-} from '../src/frontend-next/utils/mock-admin'
-import { historyNumbers, toDisplayServer } from '../src/frontend-next/utils/view-model'
-import { getNextTurnstileSite, requiresFreshLoginTurnstileToken } from '../src/frontend-next/utils/turnstile'
-import { http } from '../src/frontend-next/utils/http'
-import { normalizeLiveSocketScope } from '../src/frontend-next/utils/live-socket'
-import { currentLanguage, t } from '../src/frontend-next/utils/i18n'
-import { resolveTheme } from '../src/frontend-next/composables/useTheme'
+} from '../src/frontend/utils/mock-admin'
+import { historyNumbers, toDisplayServer } from '../src/frontend/utils/view-model'
+import { getNextTurnstileSite, requiresFreshLoginTurnstileToken } from '../src/frontend/utils/turnstile'
+import { http } from '../src/frontend/utils/http'
+import { normalizeLiveSocketScope } from '../src/frontend/utils/live-socket'
+import { currentLanguage, t } from '../src/frontend/utils/i18n'
+import { resolveTheme } from '../src/frontend/composables/useTheme'
 import {
   formatChartValue,
   getChartTimeUnit,
   insertChartGapBreaks,
-} from '../src/frontend-next/utils/chart'
+} from '../src/frontend/utils/chart'
 
 test('normalizes legacy display mode values', () => {
   assert.equal(normalizeDisplayMode('list'), 'table')
@@ -519,7 +519,7 @@ test('maps backend settings without exposing write-only secrets', () => {
   assert.equal(payload.expire_reminder, 'true')
 })
 
-test('switches the next frontend copy reactively and keeps explicit themes stable', () => {
+test('switches the frontend copy reactively and keeps explicit themes stable', () => {
   const previous = currentLanguage.value
   try {
     currentLanguage.value = 'en'
