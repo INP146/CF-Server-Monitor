@@ -645,51 +645,18 @@ EdgeProbe/
 │   │   ├── serverBilling.js    # 服务器计费字段规范化
 │   │   ├── settings.js         # 设置管理
 │   │   └── version.js          # 版本检查
-│   └── frontend/               # Vue 3 前端应用
-│       ├── App.vue             # 根组件
-│       ├── main.js             # 前端入口
-│       ├── components/         # Vue 组件
-│       │   ├── Footer.vue
-│       │   ├── ServerBarCard.vue
-│       │   ├── ServerRingCard.vue
-│       │   └── TerminalHeader.vue
-│       ├── composables/        # 通用组合式函数
-│       │   ├── useServerCardData.js
-│       │   ├── usePasswordVisibility.js
-│       │   └── useTheme.js
-│       ├── router/
-│       │   └── index.js        # Vue Router 配置
-│       ├── styles/             # 样式文件
-│       │   ├── light.css
-│       │   └── main.css
-│       ├── utils/
-│       │   ├── api.js          # API 请求封装 + WebSocket 客户端
-│       │   ├── config.js       # 前端运行时配置
-│       │   ├── constants.js    # 前端常量
-│       │   ├── displayMode.js  # 前端显示模式规范化
-│       │   ├── http.js         # HTTP 请求封装
-│       │   ├── i18n.js         # 国际化配置
-│       │   ├── osIcon.js       # 系统图标匹配
-│       │   ├── pingNode.js     # Ping 节点校验
-│       │   ├── playback.js     # WebSocket 回放节流
-│       │   ├── server.js       # 前端服务器指标与计费显示工具
-│       │   ├── time.js         # 时间格式化工具
-│       │   └── turnstile.js    # Turnstile 共享工具
-│       └── views/              # 页面视图
-│           ├── admin/          # 管理后台（拆分为独立模块）
-│           │   ├── index.vue   # 管理后台主入口
-│           │   ├── components/ # 后台子组件
-│           │   │   ├── AdminLogin.vue
-│           │   │   ├── CopyCommandModal.vue
-│           │   │   ├── DatabasePanel.vue
-│           │   │   ├── DeleteServerModal.vue
-│           │   │   ├── EditServerModal.vue
-│           │   │   ├── ServerTable.vue
-│           │   │   └── SettingsPanel.vue
-│           │   └── composables/
-│           │       └── useTurnstile.js
-│           ├── Dashboard.vue    # 首页（接入 WebSocket 实时推送）
-│           └── ServerDetail.vue # 服务器详情页（历史图表 + 实时推送）
+│   ├── frontend/               # 当前 Vue 3 + TypeScript 前端应用
+│   │   ├── index.html          # Vite HTML 入口
+│   │   ├── main.ts             # 前端入口
+│   │   ├── App.vue             # 根组件
+│   │   ├── components/         # 页面组件
+│   │   ├── composables/        # 组合式函数
+│   │   ├── data/               # 页面数据模型
+│   │   ├── router/             # Vue Router 配置
+│   │   ├── types/              # 前端类型定义
+│   │   ├── utils/              # API、格式化及运行时工具
+│   │   └── views/              # 页面视图
+│   └── frontend-old/           # 旧版 Vue 3 + JavaScript 前端（回退用）
 ├── scripts/
 │   ├── build.js                 # 前端构建脚本
 │   ├── build-github-page.js     # GitHub Pages 构建脚本
@@ -700,12 +667,14 @@ EdgeProbe/
 │   ├── api-check.js            # 本地 API 检查工具
 │   ├── generate-sql.js         # 测试数据生成工具
 │   ├── mock-data.sql           # 模拟数据 SQL
-│   └── mock-sender.sh          # 模拟数据发送脚本（macOS）
-├── index.html
-├── jsconfig.json               # JS 配置
+│   ├── mock-sender.sh          # 模拟数据发送脚本（macOS）
+│   └── frontend-logic.test.ts  # 当前前端逻辑测试
+├── jsconfig.json               # 旧版前端 JS 配置
 ├── package.json                # 项目依赖与 npm scripts
 ├── package-lock.json           # npm 依赖锁定文件
 ├── vite.config.js              # Vite 配置
+├── vite.config.old.js          # 旧版前端 Vite 配置
+├── tsconfig.frontend.json      # 当前前端 TypeScript 配置
 ├── wrangler.toml               # Wrangler 本地开发配置
 ├── API.md                      # 全局 API 文档
 └── .github/
@@ -827,6 +796,9 @@ npm run dev:frontend
 
 # 构建前端生产版本
 npm run build:frontend
+
+# 如需启动旧版前端回退环境（默认 https://localhost:5174）
+npm run dev:frontend-old
 
 # 部署到 Cloudflare Workers
 npm run deploy

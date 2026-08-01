@@ -5,7 +5,7 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "paths": {
-      "@next/*": ["./src/frontend-next/*"]
+      "@/*": ["./src/frontend/*"]
     },
     "strict": true,
     "jsx": "preserve",
@@ -18,8 +18,8 @@
     "skipLibCheck": true
   },
   "include": [
-    "src/frontend-next/**/*.ts",
-    "src/frontend-next/**/*.tsx",
-    "src/frontend-next/**/*.vue"
+    "src/frontend/**/*.ts",
+    "src/frontend/**/*.tsx",
+    "src/frontend/**/*.vue"
   ]
 }
