@@ -6,7 +6,7 @@ export type ThemePreference = 'dark' | 'light' | 'auto'
 export type ResolvedTheme = Exclude<ThemePreference, 'auto'>
 
 const currentTheme = ref<ThemePreference>('auto')
-const resolvedTheme = ref<ResolvedTheme>('dark')
+export const resolvedTheme = ref<ResolvedTheme>('dark')
 const callbacks = new Set<(theme: ResolvedTheme) => void>()
 let mediaQuery: MediaQueryList | null = null
 

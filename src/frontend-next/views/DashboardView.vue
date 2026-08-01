@@ -44,7 +44,9 @@
             </div>
           </div>
 
-          <div v-if="dashboard.isLoading.value" class="empty-result"><a-spin :tip="t('loadingMonitor')" /></div>
+          <div v-if="dashboard.isLoading.value" class="dashboard-loading" role="status" aria-live="polite">
+            <a-spin :tip="t('loadingMonitor')" />
+          </div>
 
           <template v-else-if="filteredServers.length && view === 'bar'">
             <section v-for="group in groupedFilteredServers" :key="group.name" class="server-group-section">
