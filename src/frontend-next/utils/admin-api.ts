@@ -154,6 +154,7 @@ export function applyAdminSettings(target: GlobalSettings, source: Record<string
   target.telegramBotToken = String(source.tg_bot_token || '')
   target.telegramChatId = String(source.tg_chat_id || '')
   target.offlineNotifyMinutes = number(source.tg_notify as NumericValue)
+  target.expiryReminder = bool(source.expire_reminder)
   target.turnstileEnabled = bool(source.turnstile_enabled)
   target.turnstileLoginEnabled = bool(source.turnstile_login_enabled)
   target.turnstileSiteKey = String(source.turnstile_site_key || '')
@@ -184,6 +185,7 @@ export function toAdminSettingsPayload(settings: GlobalSettings): Record<string,
     custom_cm: settings.customCm,
     custom_bd: settings.customBd,
     tg_notify: String(settings.offlineNotifyMinutes),
+    expire_reminder: String(settings.expiryReminder),
     tg_bot_token: settings.telegramBotToken,
     tg_chat_id: settings.telegramChatId,
     turnstile_enabled: String(settings.turnstileEnabled),

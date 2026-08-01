@@ -6,6 +6,7 @@ export type ThemePreference = 'dark' | 'light' | 'auto'
 export type ResolvedTheme = Exclude<ThemePreference, 'auto'>
 
 const currentTheme = ref<ThemePreference>('auto')
+const resolvedTheme = ref<ResolvedTheme>('dark')
 const callbacks = new Set<(theme: ResolvedTheme) => void>()
 let mediaQuery: MediaQueryList | null = null
 
@@ -23,6 +24,7 @@ export function resolveTheme(theme: ThemePreference): ResolvedTheme {
 
 export function applyTheme(theme: ThemePreference): ResolvedTheme {
   const resolved = resolveTheme(theme)
+  resolvedTheme.value = resolved
   document.body.classList.remove('dark', 'light')
   if (resolved === 'light') document.body.classList.add('light')
   for (const callback of callbacks) callback(resolved)
@@ -42,7 +44,7 @@ export function useTheme() {
 
   const getPreferredTheme = (): ThemePreference => {
     const stored = localStorage.getItem(STORAGE.THEME_PREFERENCE)
-    return isTheme(stored) ? stored : 'dark'
+    return isTheme(stored) ? stored : 'auto'
   }
 
   const setTheme = (theme: ThemePreference): ResolvedTheme => {
@@ -69,5 +71,5 @@ export function useTheme() {
   }
 
   onMounted(initTheme)
-  return { currentTheme, setTheme, getPreferredTheme, applyTheme, toggleTheme, initTheme, onThemeChange }
+  return { currentTheme, resolvedTheme, setTheme, getPreferredTheme, applyTheme, toggleTheme, initTheme, onThemeChange }
 }

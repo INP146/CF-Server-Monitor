@@ -3,15 +3,15 @@
     <AppHeader :title="siteTitle" subtitle="ADMIN LOGIN" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
       <a-button type="text" href="#/">
         <template #icon><ArrowLeftOutlined /></template>
-        返回监控页
+        {{ t('backDashboard') }}
       </a-button>
     </AppHeader>
 
     <section class="login-panel" aria-labelledby="login-title">
       <a-card class="login-card">
         <div class="login-heading">
-          <h1 id="login-title">登录管理后台</h1>
-          <p>选择管理站点并输入管理员凭据</p>
+          <h1 id="login-title">{{ t('loginAdmin') }}</h1>
+          <p>{{ t('loginDescription') }}</p>
         </div>
 
         <a-form
@@ -21,7 +21,7 @@
           required-mark="optional"
           @finish="submitLogin"
         >
-          <a-form-item label="管理站点" name="apiEndpoint">
+          <a-form-item :label="t('adminSite')" name="apiEndpoint">
             <a-select v-model:value="formState.apiEndpoint" size="large" :disabled="submitting">
               <a-select-option v-for="endpoint in apiEndpoints" :key="endpoint.value" :value="endpoint.value">
                 {{ endpoint.label }} · {{ endpoint.value }}
@@ -31,11 +31,11 @@
 
           <a-alert v-if="loginError" type="error" show-icon :message="loginError" class="admin-feedback">
             <template v-if="turnstileConfigFailed" #action>
-              <a-button size="small" :loading="turnstileConfigLoading" @click="setupTurnstile">重试</a-button>
+              <a-button size="small" :loading="turnstileConfigLoading" @click="setupTurnstile">{{ t('retry') }}</a-button>
             </template>
           </a-alert>
 
-          <a-form-item label="用户名" name="username">
+          <a-form-item :label="t('username')" name="username">
             <a-input
               v-model:value="formState.username"
               size="large"
@@ -47,13 +47,13 @@
             </a-input>
           </a-form-item>
 
-          <a-form-item label="密码" name="password">
+          <a-form-item :label="t('password')" name="password">
             <a-input-password
               v-model:value="formState.password"
               size="large"
               name="password"
               autocomplete="current-password"
-              placeholder="请输入密码"
+              :placeholder="t('enterPassword')"
             >
               <template #prefix><LockOutlined /></template>
             </a-input-password>
@@ -70,16 +70,17 @@
             :disabled="turnstileConfigFailed"
           >
             <template #icon><LoginOutlined /></template>
-            登录
+            {{ t('login') }}
           </a-button>
         </a-form>
       </a-card>
     </section>
+    <AppFooter />
   </main>
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AAlert from 'ant-design-vue/es/alert'
 import AButton from 'ant-design-vue/es/button'
@@ -94,12 +95,14 @@ import {
   UserOutlined,
 } from '@ant-design/icons-vue'
 import AppHeader from '../components/AppHeader.vue'
+import AppFooter from '../components/AppFooter.vue'
 import { useTurnstile } from '../composables/useTurnstile'
 import { login } from '../utils/api'
 import { normalizeApiIndex } from '../utils/auth'
 import { getApiBases } from '../utils/config'
 import { getPostLoginTarget } from '../utils/routing'
 import { requiresFreshLoginTurnstileToken } from '../utils/turnstile'
+import { t } from '../utils/i18n'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
@@ -110,10 +113,10 @@ const siteTitle = document.title || 'EdgeProbe'
 const route = useRoute()
 const router = useRouter()
 const bases = getApiBases()
-const apiEndpoints = bases.map((value, index) => ({ label: bases.length > 1 ? `站点 ${index + 1}` : '当前站点', value }))
+const apiEndpoints = computed(() => bases.map((value, index) => ({ label: bases.length > 1 ? t('siteNumber', { number: index + 1 }) : t('currentSite'), value })))
 const initialApiIndex = normalizeApiIndex(route.query.api ?? route.query.apiIndex)
 const formState = reactive({
-  apiEndpoint: apiEndpoints[initialApiIndex]?.value ?? apiEndpoints[0]!.value,
+  apiEndpoint: apiEndpoints.value[initialApiIndex]?.value ?? apiEndpoints.value[0]!.value,
   username: '',
   password: '',
 })
@@ -134,17 +137,17 @@ const turnstileConfigFailed = ref(false)
 let turnstileSetupRun = 0
 let loginMounted = false
 
-const rules: Record<string, Rule[]> = {
-  apiEndpoint: [{ required: true, message: '请选择管理站点', trigger: 'change' }],
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-  password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-}
+const rules = computed<Record<string, Rule[]>>(() => ({
+  apiEndpoint: [{ required: true, message: t('selectAdminSite'), trigger: 'change' }],
+  username: [{ required: true, message: t('enterUsername'), trigger: 'blur' }],
+  password: [{ required: true, message: t('enterPassword'), trigger: 'blur' }],
+}))
 
 async function submitLogin() {
   if (submitting.value) return
   loginError.value = ''
   if (turnstileRequired.value && !turnstileToken.value) {
-    loginError.value = '请先完成安全验证'
+    loginError.value = t('completeVerification')
     return
   }
   submitting.value = true
@@ -153,8 +156,8 @@ async function submitLogin() {
   submitting.value = false
   if (result.error) {
     loginError.value = result.status === 403
-      ? '安全验证失败，请重试'
-      : result.status === 401 ? '用户名或密码错误' : (result.message || result.error || '登录请求失败')
+      ? t('verificationFailed')
+      : result.status === 401 ? t('invalidCredentials') : (result.message || result.error || t('loginFailed'))
     formState.password = ''
     clearTurnstile()
     resetTurnstile('#admin-turnstile-container')
@@ -178,7 +181,7 @@ async function setupTurnstile() {
       return
     }
     if (turnstileRequired.value && !turnstileSiteKey.value) {
-      loginError.value = '当前站点未配置 Turnstile Site Key'
+      loginError.value = t('missingTurnstileKey')
       turnstileConfigFailed.value = true
       return
     }

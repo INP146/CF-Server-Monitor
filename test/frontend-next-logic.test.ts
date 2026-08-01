@@ -48,6 +48,8 @@ import { historyNumbers, toDisplayServer } from '../src/frontend-next/utils/view
 import { getNextTurnstileSite, requiresFreshLoginTurnstileToken } from '../src/frontend-next/utils/turnstile'
 import { http } from '../src/frontend-next/utils/http'
 import { normalizeLiveSocketScope } from '../src/frontend-next/utils/live-socket'
+import { currentLanguage, t } from '../src/frontend-next/utils/i18n'
+import { resolveTheme } from '../src/frontend-next/composables/useTheme'
 
 test('normalizes legacy display mode values', () => {
   assert.equal(normalizeDisplayMode('list'), 'table')
@@ -471,6 +473,9 @@ test('maps dashboard and admin API records into the new frontend models', () => 
   assert.equal(display.priceText, '$12.00/月')
   assert.equal(display.expireDate, '2027-12-31')
   assert.equal(display.trafficUsed, '3 KB')
+  const englishDisplay = toDisplayServer(record, now, 0, 'en')
+  assert.equal(englishDisplay.priceText, '$12.00/M')
+  assert.equal(englishDisplay.trafficLimitText, '10 GB')
 
   const managed = toManagedServer(record, now)
   assert.equal(managed.enabled, false)
@@ -493,6 +498,7 @@ test('maps backend settings without exposing write-only secrets', () => {
     cloudflare_account_id: 'account-id',
     custom_head: '<meta name="custom" content="yes">',
     custom_script: 'window.custom = true',
+    expire_reminder: 'true',
   })
   assert.equal(settings.siteTitle, 'Fleet')
   assert.equal(settings.defaultView, 'table')
@@ -501,9 +507,26 @@ test('maps backend settings without exposing write-only secrets', () => {
   assert.equal(settings.cloudflareAccountId, 'account-id')
   assert.equal(settings.customHead, '<meta name="custom" content="yes">')
   assert.equal(settings.customScript, 'window.custom = true')
+  assert.equal(settings.expiryReminder, true)
   const payload = toAdminSettingsPayload(settings)
   assert.equal(payload.custom_head, '<meta name="custom" content="yes">')
   assert.equal(payload.custom_script, 'window.custom = true')
+  assert.equal(payload.expire_reminder, 'true')
+})
+
+test('switches the next frontend copy reactively and keeps explicit themes stable', () => {
+  const previous = currentLanguage.value
+  try {
+    currentLanguage.value = 'en'
+    assert.equal(t('online'), 'Online')
+    assert.equal(t('siteNumber', { number: 2 }), 'Site 2')
+    currentLanguage.value = 'zh'
+    assert.equal(t('online'), '在线')
+    assert.equal(resolveTheme('dark'), 'dark')
+    assert.equal(resolveTheme('light'), 'light')
+  } finally {
+    currentLanguage.value = previous
+  }
 })
 
 test('round-trips server backup data and rejects non-array payloads', () => {

@@ -1,53 +1,53 @@
 <template>
-  <a-modal v-model:open="open" :title="server ? `编辑服务器 · ${server.name}` : '添加服务器'" width="880px" ok-text="保存" cancel-text="取消" :ok-button-props="{ disabled: !form.name.trim() || hasPingErrors }" @ok="submit">
+  <a-modal v-model:open="open" :title="server ? `${t('edit')} ${t('server')} · ${server.name}` : t('addServer')" width="880px" :ok-text="t('save')" :cancel-text="t('cancel')" :ok-button-props="{ disabled: !form.name.trim() || hasPingErrors }" @ok="submit">
     <a-tabs v-model:active-key="activeTab" class="modal-tabs">
-      <a-tab-pane key="basic" tab="基本信息">
+      <a-tab-pane key="basic" :tab="t('basicInfo')">
         <a-form layout="vertical" class="server-modal-form">
           <div class="modal-form-grid three-columns">
-            <a-form-item label="服务器名称" required><a-input v-model:value="form.name" placeholder="例如 LAX Core 01" /></a-form-item>
-            <a-form-item label="分组"><a-input v-model:value="form.group" placeholder="Default" /></a-form-item>
-            <a-form-item label="区域代码"><a-input v-model:value="form.region" placeholder="US" /></a-form-item>
+            <a-form-item :label="t('serverName')" required><a-input v-model:value="form.name" placeholder="LAX Core 01" /></a-form-item>
+            <a-form-item :label="t('group')"><a-input v-model:value="form.group" placeholder="Default" /></a-form-item>
+            <a-form-item :label="t('regionCode')"><a-input v-model:value="form.region" placeholder="US" /></a-form-item>
           </div>
-          <a-form-item label="标签"><a-select v-model:value="form.tags" mode="tags" placeholder="输入后回车" :options="tagOptions" /></a-form-item>
-          <a-form-item label="备注"><a-textarea v-model:value="form.note" :rows="3" placeholder="可选，后台双击可快速复制" /></a-form-item>
+          <a-form-item :label="t('tags')"><a-select v-model:value="form.tags" mode="tags" :placeholder="t('tagsPlaceholder')" :options="tagOptions" /></a-form-item>
+          <a-form-item :label="t('note')"><a-textarea v-model:value="form.note" :rows="3" :placeholder="t('notePlaceholder')" /></a-form-item>
           <div class="modal-switch-grid">
-            <label><span>从公开页面隐藏</span><a-switch v-model:checked="form.isHidden" /></label>
-            <label><span>禁用离线通知</span><a-switch v-model:checked="form.offlineNotifyDisabled" /></label>
+            <label><span>{{ t('hidePublic') }}</span><a-switch v-model:checked="form.isHidden" /></label>
+            <label><span>{{ t('disableOfflineNotification') }}</span><a-switch v-model:checked="form.offlineNotifyDisabled" /></label>
           </div>
         </a-form>
       </a-tab-pane>
 
-      <a-tab-pane key="billing" tab="费用与流量">
+      <a-tab-pane key="billing" :tab="t('billingTraffic')">
         <a-form layout="vertical" class="server-modal-form">
           <div class="modal-form-grid three-columns">
-            <a-form-item label="价格"><a-input-number v-model:value="form.price" :min="0" :precision="2" /></a-form-item>
-            <a-form-item label="币种"><a-select v-model:value="form.currency" :options="currencyOptions" /></a-form-item>
-            <a-form-item label="计费周期"><a-select v-model:value="form.billingCycle" :options="billingOptions" /></a-form-item>
+            <a-form-item :label="t('price')"><a-input-number v-model:value="form.price" :min="0" :precision="2" /></a-form-item>
+            <a-form-item :label="t('currency')"><a-select v-model:value="form.currency" :options="currencyOptions" /></a-form-item>
+            <a-form-item :label="t('billingCycle')"><a-select v-model:value="form.billingCycle" :options="billingOptions" /></a-form-item>
           </div>
           <div class="modal-form-grid">
-            <a-form-item label="到期时间"><a-input v-model:value="form.expireDate" type="date" /></a-form-item>
-            <a-form-item label="自动续费"><div class="inline-switch"><a-switch v-model:checked="form.autoRenewal" /><span>到期后自动顺延计费周期</span></div></a-form-item>
+            <a-form-item :label="t('expiryDate')"><a-input v-model:value="form.expireDate" type="date" /></a-form-item>
+            <a-form-item :label="t('autoRenewal')"><div class="inline-switch"><a-switch v-model:checked="form.autoRenewal" /><span>{{ t('autoRenewalHint') }}</span></div></a-form-item>
           </div>
           <div class="modal-form-grid three-columns">
-            <a-form-item label="月流量额度"><a-input-number v-model:value="form.trafficLimit" :min="0" addon-after="GB" /></a-form-item>
-            <a-form-item label="流量计算"><a-select v-model:value="form.trafficCalcType" :options="trafficOptions" /></a-form-item>
-            <a-form-item label="重置日"><a-input-number v-model:value="form.resetDay" :min="0" :max="31" addon-after="日" /></a-form-item>
+            <a-form-item :label="t('trafficLimit')"><a-input-number v-model:value="form.trafficLimit" :min="0" addon-after="GB" /></a-form-item>
+            <a-form-item :label="t('trafficCalculation')"><a-select v-model:value="form.trafficCalcType" :options="trafficOptions" /></a-form-item>
+            <a-form-item :label="t('resetDay')"><a-input-number v-model:value="form.resetDay" :min="0" :max="31" /></a-form-item>
           </div>
           <div class="modal-form-grid">
-            <a-form-item label="下行修正"><a-input-number :value="form.rxCorrection ?? undefined" :min="0" :precision="1" addon-after="GB" @update:value="form.rxCorrection = normalizeCorrectionInput($event)" /></a-form-item>
-            <a-form-item label="上行修正"><a-input-number :value="form.txCorrection ?? undefined" :min="0" :precision="1" addon-after="GB" @update:value="form.txCorrection = normalizeCorrectionInput($event)" /></a-form-item>
+            <a-form-item :label="t('rxCorrection')"><a-input-number :value="form.rxCorrection ?? undefined" :min="0" :precision="1" addon-after="GB" @update:value="form.rxCorrection = normalizeCorrectionInput($event)" /></a-form-item>
+            <a-form-item :label="t('txCorrection')"><a-input-number :value="form.txCorrection ?? undefined" :min="0" :precision="1" addon-after="GB" @update:value="form.txCorrection = normalizeCorrectionInput($event)" /></a-form-item>
           </div>
         </a-form>
       </a-tab-pane>
 
-      <a-tab-pane key="agent" tab="Agent 与探测">
+      <a-tab-pane key="agent" :tab="t('agentProbe')">
         <a-form layout="vertical" class="server-modal-form">
           <div class="modal-form-grid three-columns">
-            <a-form-item label="采集间隔"><a-select v-model:value="form.collectInterval" :options="collectIntervalOptions" /></a-form-item>
-            <a-form-item label="上报间隔"><a-select v-model:value="form.reportInterval" :options="reportIntervalOptions" /></a-form-item>
-            <a-form-item label="自动更新"><div class="inline-switch"><a-switch v-model:checked="form.autoUpdate" /><span>自动安装新 Agent</span></div></a-form-item>
+            <a-form-item :label="t('collectInterval')"><a-select v-model:value="form.collectInterval" :options="collectIntervalOptions" /></a-form-item>
+            <a-form-item :label="t('reportInterval')"><a-select v-model:value="form.reportInterval" :options="reportIntervalOptions" /></a-form-item>
+            <a-form-item :label="t('autoUpdate')"><div class="inline-switch"><a-switch v-model:checked="form.autoUpdate" /><span>{{ t('autoInstallAgent') }}</span></div></a-form-item>
           </div>
-          <a-alert v-if="form.autoUpdate" type="warning" show-icon message="自动更新会执行远程升级脚本，请先确认节点环境兼容。" class="editor-alert" />
+          <a-alert v-if="form.autoUpdate" type="warning" show-icon :message="t('autoUpdateWarning')" class="editor-alert" />
           <div class="modal-form-grid">
             <a-form-item v-for="node in pingNodes" :key="node.key" :label="node.label" :validate-status="pingError(node.key) ? 'error' : ''" :help="pingError(node.key)">
               <a-input v-model:value="form[node.key]" :placeholder="node.placeholder" />
@@ -73,6 +73,7 @@ import ATabs, { TabPane as ATabPane } from 'ant-design-vue/es/tabs'
 import type { ManagedServer } from '../data/admin'
 import { BILLING_CYCLES, CURRENCY_OPTIONS } from '../utils/server'
 import { validatePingNode } from '../utils/ping-node'
+import { currentLanguage, t } from '../utils/i18n'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{
@@ -102,7 +103,7 @@ const emptyServer = (): ManagedServer => ({
   uptime: '-',
   load: '- / - / -',
   enabled: true,
-  agentVersion: '等待安装',
+  agentVersion: t('waitingInstall'),
   note: '',
   price: 0,
   currency: '$',
@@ -138,25 +139,25 @@ watch(() => [open.value, props.server] as const, ([isOpen, server]) => {
 }, { immediate: true })
 
 const tagOptions = ['Core', 'Edge', 'IPv4', 'IPv6', 'IPv4/6'].map((value) => ({ label: value, value }))
-const currencyOptions = CURRENCY_OPTIONS.slice(0, 10).map((item) => ({ label: `${item.symbol} ${item.nameZh}`, value: item.symbol }))
-const billingOptions = BILLING_CYCLES.map((item) => ({ label: item.labelZh, value: item.value }))
-const trafficOptions = [
-  { label: '上下行合计', value: 'total' }, { label: '仅上行', value: 'ul' }, { label: '仅下行', value: 'dl' }, { label: '取较大值', value: 'max' },
-]
-const collectIntervalOptions = [0, 1, 2, 5, 10].map((value) => ({ label: value === 0 ? '关闭缓存采样' : `${value} 秒`, value }))
-const reportIntervalOptions = [30, 60, 120, 180].map((value) => ({ label: `${value} 秒`, value }))
-const pingNodes = [
-  { key: 'customCt' as const, label: '中国电信探测点', placeholder: 'gd-ct-dualstack.ip.zstaticcdn.com' },
-  { key: 'customCu' as const, label: '中国联通探测点', placeholder: 'gd-cu-dualstack.ip.zstaticcdn.com' },
-  { key: 'customCm' as const, label: '中国移动探测点', placeholder: 'gd-cm-dualstack.ip.zstaticcdn.com' },
-  { key: 'customBd' as const, label: '百度探测点', placeholder: 'ip.zstaticcdn.com' },
-]
+const currencyOptions = computed(() => CURRENCY_OPTIONS.slice(0, 10).map((item) => ({ label: `${item.symbol} ${currentLanguage.value === 'zh' ? item.nameZh : item.nameEn}`, value: item.symbol })))
+const billingOptions = computed(() => BILLING_CYCLES.map((item) => ({ label: currentLanguage.value === 'zh' ? item.labelZh : item.labelEn, value: item.value })))
+const trafficOptions = computed(() => [
+  { label: t('trafficTotal'), value: 'total' }, { label: t('uploadOnly'), value: 'ul' }, { label: t('downloadOnly'), value: 'dl' }, { label: t('trafficMax'), value: 'max' },
+])
+const collectIntervalOptions = computed(() => [0, 1, 2, 5, 10].map((value) => ({ label: value === 0 ? t('disableCachedSampling') : t('seconds', { count: value }), value })))
+const reportIntervalOptions = computed(() => [30, 60, 120, 180].map((value) => ({ label: t('seconds', { count: value }), value })))
+const pingNodes = computed(() => [
+  { key: 'customCt' as const, label: t('telecomProbe'), placeholder: 'gd-ct-dualstack.ip.zstaticcdn.com' },
+  { key: 'customCu' as const, label: t('unicomProbe'), placeholder: 'gd-cu-dualstack.ip.zstaticcdn.com' },
+  { key: 'customCm' as const, label: t('mobileProbe'), placeholder: 'gd-cm-dualstack.ip.zstaticcdn.com' },
+  { key: 'customBd' as const, label: t('baiduProbe'), placeholder: 'ip.zstaticcdn.com' },
+])
 
-function pingError(key: typeof pingNodes[number]['key']) {
+function pingError(key: 'customCt' | 'customCu' | 'customCm' | 'customBd') {
   const value = form[key]
-  return value && !validatePingNode(value).valid ? '请输入有效的域名、IP 或 host:port' : ''
+  return value && !validatePingNode(value).valid ? t('invalidPingNode') : ''
 }
-const hasPingErrors = computed(() => pingNodes.some((node) => Boolean(pingError(node.key))))
+const hasPingErrors = computed(() => pingNodes.value.some((node) => Boolean(pingError(node.key))))
 
 function normalizeCorrectionInput(value: unknown): number | null {
   if (value === null || value === undefined || value === '') return null

@@ -51,6 +51,7 @@ export interface GlobalSettings {
   telegramBotToken: string
   telegramChatId: string
   offlineNotifyMinutes: number
+  expiryReminder: boolean
   turnstileSiteKey: string
   turnstileSecret: string
   turnstileEnabled: boolean
@@ -119,6 +120,7 @@ export const createDefaultSettings = (): GlobalSettings => ({
   telegramBotToken: '',
   telegramChatId: '',
   offlineNotifyMinutes: 5,
+  expiryReminder: false,
   turnstileSiteKey: '',
   turnstileSecret: '',
   turnstileEnabled: false,

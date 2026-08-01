@@ -1,27 +1,27 @@
 <template>
   <div class="detail-page" :class="{ 'is-dark': isDark }">
     <AppHeader :title="siteTitle" subtitle="SERVER DETAILS" :is-dark="isDark" @toggle-theme="$emit('toggle-theme')">
-      <a-button type="text" href="#/"><template #icon><ArrowLeftOutlined /></template>返回监控页</a-button>
-      <a-button type="text" :href="adminHref"><template #icon><SettingOutlined /></template>管理后台</a-button>
+      <a-button type="text" href="#/"><template #icon><ArrowLeftOutlined /></template>{{ t('backDashboard') }}</a-button>
+      <a-button type="text" :href="adminHref"><template #icon><SettingOutlined /></template>{{ t('admin') }}</a-button>
     </AppHeader>
 
-    <main v-if="loading && !server" class="detail-content detail-empty"><a-spin tip="正在加载节点数据" /></main>
+    <main v-if="loading && !server" class="detail-content detail-empty"><a-spin :tip="t('loadingServer')" /></main>
 
     <main v-else-if="server" class="detail-content">
       <section class="detail-title-row">
         <div>
           <div class="detail-title-line">
             <h1>{{ server.name }}</h1>
-            <a-badge :status="server.status === 'online' ? 'success' : 'error'" :text="server.status === 'online' ? '在线' : '离线'" />
+            <a-badge :status="server.status === 'online' ? 'success' : 'error'" :text="server.status === 'online' ? t('online') : t('offline')" />
           </div>
           <p>{{ server.location }} · {{ server.ip }} · {{ server.os }} {{ server.arch }}</p>
         </div>
-        <a-radio-group :value="currentHours" button-style="solid" class="history-range" aria-label="历史时间范围" @change="selectRange($event.target.value)">
+        <a-radio-group :value="currentHours" button-style="solid" class="history-range" :aria-label="t('historyRange')" @change="selectRange($event.target.value)">
           <a-radio-button v-for="option in timeOptions" :key="option.value" :value="option.value">{{ option.label }}</a-radio-button>
         </a-radio-group>
       </section>
 
-      <section class="detail-summary-grid" aria-label="节点摘要">
+      <section class="detail-summary-grid" :aria-label="t('nodeSummary')">
         <a-card v-for="item in summaryItems" :key="item.label" :class="['detail-summary-card', `tone-${item.tone}`]" size="small">
           <div class="detail-summary-label">
             <span class="detail-metric-icon" aria-hidden="true"><component :is="item.icon" /></span>
@@ -57,15 +57,16 @@
     </main>
 
     <main v-else class="detail-content detail-empty">
-      <a-result status="404" title="找不到节点" :sub-title="detailError || '该节点不存在或已经删除'">
-        <template #extra><a-button type="primary" href="#/">返回监控页</a-button></template>
+      <a-result status="404" :title="t('nodeNotFound')" :sub-title="detailError || t('nodeMissing')">
+        <template #extra><a-button type="primary" href="#/">{{ t('backDashboard') }}</a-button></template>
       </a-result>
     </main>
 
-    <a-modal v-model:open="loginModalOpen" title="需要管理员登录" :footer="null">
-      <p>查看 1 小时以上的历史记录需要管理员权限。</p>
-      <a-button type="primary" block :href="loginHref">前往登录</a-button>
+    <a-modal v-model:open="loginModalOpen" :title="t('adminRequired')" :footer="null">
+      <p>{{ t('longHistoryRequiresAdmin') }}</p>
+      <a-button type="primary" block :href="loginHref">{{ t('goLogin') }}</a-button>
     </a-modal>
+    <AppFooter />
   </div>
 </template>
 
@@ -102,6 +103,7 @@ import {
 } from '@ant-design/icons-vue'
 
 import AppHeader from '../components/AppHeader.vue'
+import AppFooter from '../components/AppFooter.vue'
 import MetricChart from '../components/MetricChart.vue'
 import type { MockServer } from '../data/dashboard'
 import type { DashboardServer, HistoryRecord, LiveSocketController } from '../types/dashboard'
@@ -110,6 +112,7 @@ import { normalizeApiIndex } from '../utils/auth'
 import { formatBytes, toNumber } from '../utils/format'
 import { formatDateTime, normalizeTimestamp } from '../utils/time'
 import { historyLoad, historyNumbers, historyPercents, toDisplayServer, type MetricPoint } from '../utils/view-model'
+import { currentLanguage, t } from '../utils/i18n'
 
 defineProps<{ isDark: boolean }>()
 defineEmits<{ 'toggle-theme': [] }>()
@@ -126,7 +129,7 @@ const rawServer = ref<DashboardServer | null>(null)
 const history = ref<HistoryRecord[]>([])
 const now = ref(Date.now())
 const apiIndex = computed(() => normalizeApiIndex(route.query.api ?? route.query.apiIndex))
-const server = computed<MockServer | null>(() => rawServer.value ? toDisplayServer(rawServer.value, now.value, apiIndex.value) : null)
+const server = computed<MockServer | null>(() => rawServer.value ? toDisplayServer(rawServer.value, now.value, apiIndex.value, currentLanguage.value) : null)
 const detailPath = computed(() => `/server/${encodeURIComponent(String(route.params.id || ''))}?api=${apiIndex.value}`)
 const adminHref = computed(() => `#/admin?api=${apiIndex.value}`)
 const loginHref = computed(() => `#/admin?api=${apiIndex.value}&redirect=${encodeURIComponent(detailPath.value)}`)
@@ -209,14 +212,14 @@ const scalePoints = (points: MetricPoint[], divisor: number): MetricPoint[] => p
 const summaryItems = computed(() => {
   if (!server.value) return []
   const items = [
-    { label: 'CPU 使用率', value: `${server.value.cpu}%`, className: '', icon: ThunderboltOutlined, tone: 'orange' },
-    { label: '内存使用率', value: `${server.value.memory}%`, className: '', icon: DatabaseOutlined, tone: 'purple' },
-    { label: '磁盘使用率', value: `${server.value.disk}%`, className: '', icon: PieChartOutlined, tone: 'teal' },
-    { label: '网络延迟', value: server.value.latency === null ? '超时' : `${server.value.latency} ms`, className: server.value.latency === null ? 'metric-danger' : '', icon: WifiOutlined, tone: 'blue' },
+    { label: t('cpuUsage'), value: `${server.value.cpu}%`, className: '', icon: ThunderboltOutlined, tone: 'orange' },
+    { label: t('memoryUsage'), value: `${server.value.memory}%`, className: '', icon: DatabaseOutlined, tone: 'purple' },
+    { label: t('diskUsage'), value: `${server.value.disk}%`, className: '', icon: PieChartOutlined, tone: 'teal' },
+    { label: t('networkLatency'), value: server.value.latency === null ? t('timeout') : `${server.value.latency} ms`, className: server.value.latency === null ? 'metric-danger' : '', icon: WifiOutlined, tone: 'blue' },
   ]
   if (currentGpus.value.length) {
     const usages = currentGpus.value.map((gpu) => Number.parseFloat(String(gpu.info ?? ''))).filter(Number.isFinite)
-    items.splice(1, 0, { label: 'GPU 使用率', value: usages.length ? `${Math.max(...usages).toFixed(1)}%` : 'N/A', className: '', icon: FundProjectionScreenOutlined, tone: 'green' })
+    items.splice(1, 0, { label: t('gpuUsage'), value: usages.length ? `${Math.max(...usages).toFixed(1)}%` : 'N/A', className: '', icon: FundProjectionScreenOutlined, tone: 'green' })
   }
   return items
 })
@@ -225,18 +228,18 @@ const systemItems = computed(() => {
   if (!server.value || !rawServer.value) return []
   const raw = rawServer.value
   const items = [
-    { label: '系统', value: `${server.value.os} / ${server.value.arch}`, icon: DesktopOutlined },
-    { label: '内核', value: String(raw.kernel_version || '-'), icon: CodeOutlined },
-    { label: 'CPU', value: `${String(raw.cpu_info || '-')} · ${toNumber(raw.cpu_cores as string | number | null | undefined)} 核`, icon: DashboardOutlined },
-    { label: '内存 / 磁盘', value: `${formatBytes(raw.ram_total)} / ${formatBytes(raw.disk_total)}`, icon: HddOutlined },
-    { label: '系统负载', value: server.value.load, icon: LineChartOutlined },
-    { label: '运行时间', value: server.value.uptime, icon: FieldTimeOutlined },
-    { label: '启动时间', value: formatDateTime(normalizeTimestamp(raw.boot_time as string | number | null | undefined)), icon: PoweroffOutlined },
-    { label: '最后上报', value: formatDateTime(normalizeTimestamp(raw.last_updated)), icon: ClockCircleOutlined },
-    { label: '总流量', value: `↓ ${formatBytes(raw.net_rx)} / ↑ ${formatBytes(raw.net_tx)}`, icon: CloudDownloadOutlined },
-    { label: '实时网速', value: `↓ ${server.value.download} / ↑ ${server.value.upload}`, icon: SwapOutlined },
-    { label: '本月流量', value: `↓ ${formatBytes(raw.net_rx_monthly)} / ↑ ${formatBytes(raw.net_tx_monthly)}`, icon: CalendarOutlined },
-    { label: '月流量限额', value: toNumber(raw.traffic_limit) > 0 ? `${raw.traffic_limit} GB` : '不限', icon: DatabaseOutlined },
+    { label: t('system'), value: `${server.value.os} / ${server.value.arch}`, icon: DesktopOutlined },
+    { label: t('kernel'), value: String(raw.kernel_version || '-'), icon: CodeOutlined },
+    { label: 'CPU', value: `${String(raw.cpu_info || '-')} · ${t('cores', { count: toNumber(raw.cpu_cores as string | number | null | undefined) })}`, icon: DashboardOutlined },
+    { label: t('memoryDisk'), value: `${formatBytes(raw.ram_total)} / ${formatBytes(raw.disk_total)}`, icon: HddOutlined },
+    { label: t('systemLoad'), value: server.value.load, icon: LineChartOutlined },
+    { label: t('uptime'), value: server.value.uptime, icon: FieldTimeOutlined },
+    { label: t('bootTime'), value: formatDateTime(normalizeTimestamp(raw.boot_time as string | number | null | undefined)), icon: PoweroffOutlined },
+    { label: t('lastReport'), value: formatDateTime(normalizeTimestamp(raw.last_updated)), icon: ClockCircleOutlined },
+    { label: t('totalTraffic'), value: `↓ ${formatBytes(raw.net_rx)} / ↑ ${formatBytes(raw.net_tx)}`, icon: CloudDownloadOutlined },
+    { label: t('realtimeSpeed'), value: `↓ ${server.value.download} / ↑ ${server.value.upload}`, icon: SwapOutlined },
+    { label: t('currentMonthTraffic'), value: `↓ ${formatBytes(raw.net_rx_monthly)} / ↑ ${formatBytes(raw.net_tx_monthly)}`, icon: CalendarOutlined },
+    { label: t('monthlyTrafficLimit'), value: toNumber(raw.traffic_limit) > 0 ? `${raw.traffic_limit} GB` : t('unlimited'), icon: DatabaseOutlined },
   ]
   if (currentGpus.value.length) {
     items.splice(3, 0, { label: 'GPU', value: currentGpus.value.map((gpu, index) => gpu.name || `GPU ${index + 1}`).join(' / '), icon: FundProjectionScreenOutlined })
@@ -249,50 +252,50 @@ const chartMetrics = computed(() => {
   const raw = rawServer.value
   const loadValues = server.value.load.split('/').map((value) => Number.parseFloat(value.trim()) || 0)
   const metrics = [
-    { key: 'cpu', title: 'CPU 使用率', current: `${server.value.cpu}%`, color: '#00a88f', unit: '%', series: [
+    { key: 'cpu', title: t('cpuUsage'), current: `${server.value.cpu}%`, color: '#00a88f', unit: '%', series: [
       { label: 'CPU', color: '#00a88f', points: historyNumbers(history.value, 'cpu') },
     ] },
-    { key: 'load', title: '系统负载', current: loadValues[0]?.toFixed(2) || '0.00', color: '#1677ff', unit: '', series: [
+    { key: 'load', title: t('systemLoad'), current: loadValues[0]?.toFixed(2) || '0.00', color: '#1677ff', unit: '', series: [
       { label: '1m', color: '#00a88f', points: historyLoad(history.value, 0), fill: false },
       { label: '5m', color: '#d48806', points: historyLoad(history.value, 1), fill: false },
       { label: '15m', color: '#1677ff', points: historyLoad(history.value, 2), fill: false },
     ] },
-    { key: 'memory', title: '内存使用率', current: `${server.value.memory}%`, color: '#722ed1', unit: '%', series: [
-      { label: '内存', color: '#722ed1', points: historyPercents(history.value, 'ram_used', 'ram_total') },
+    { key: 'memory', title: t('memoryUsage'), current: `${server.value.memory}%`, color: '#722ed1', unit: '%', series: [
+      { label: t('memory'), color: '#722ed1', points: historyPercents(history.value, 'ram_used', 'ram_total') },
       { label: 'Swap', color: '#f38020', points: historyPercents(history.value, 'swap_used', 'swap_total') },
     ] },
-    { key: 'disk', title: '磁盘使用率', current: `${server.value.disk}%`, color: '#13a8a8', unit: '%', series: [
-      { label: '磁盘', color: '#13a8a8', points: historyPercents(history.value, 'disk_used', 'disk_total') },
+    { key: 'disk', title: t('diskUsage'), current: `${server.value.disk}%`, color: '#13a8a8', unit: '%', series: [
+      { label: t('disk'), color: '#13a8a8', points: historyPercents(history.value, 'disk_used', 'disk_total') },
     ] },
-    { key: 'network', title: '网络吞吐', current: `↓ ${server.value.download} / ↑ ${server.value.upload}`, color: '#16a34a', unit: ' KB/s', series: [
-      { label: '下行', color: '#00a88f', points: scalePoints(historyNumbers(history.value, 'net_in_speed'), 1024) },
-      { label: '上行', color: '#1677ff', points: scalePoints(historyNumbers(history.value, 'net_out_speed'), 1024) },
+    { key: 'network', title: t('networkThroughput'), current: `↓ ${server.value.download} / ↑ ${server.value.upload}`, color: '#16a34a', unit: ' KB/s', series: [
+      { label: t('downstream'), color: '#00a88f', points: scalePoints(historyNumbers(history.value, 'net_in_speed'), 1024) },
+      { label: t('upstream'), color: '#1677ff', points: scalePoints(historyNumbers(history.value, 'net_out_speed'), 1024) },
     ] },
-    { key: 'process', title: '进程数', current: String(raw.processes || 0), color: '#d4388c', unit: '', series: [
-      { label: '进程', color: '#d4388c', points: historyNumbers(history.value, 'processes') },
+    { key: 'process', title: t('processes'), current: String(raw.processes || 0), color: '#d4388c', unit: '', series: [
+      { label: t('process'), color: '#d4388c', points: historyNumbers(history.value, 'processes') },
     ] },
-    { key: 'connections', title: 'TCP / UDP 连接', current: `TCP ${raw.tcp_conn || 0} · UDP ${raw.udp_conn || 0}`, color: '#2f54eb', unit: '', series: [
+    { key: 'connections', title: t('connections'), current: `TCP ${raw.tcp_conn || 0} · UDP ${raw.udp_conn || 0}`, color: '#2f54eb', unit: '', series: [
       { label: 'TCP', color: '#2f54eb', points: historyNumbers(history.value, 'tcp_conn'), fill: false },
       { label: 'UDP', color: '#d4388c', points: historyNumbers(history.value, 'udp_conn'), fill: false },
     ] },
-    { key: 'latency', title: '四网延迟', current: server.value.latency === null ? '超时' : `CT ${raw.ping_ct || '-'} ms`, color: '#eb2f96', unit: ' ms', series: [
-      { label: '电信', color: '#00a88f', points: historyNumbers(history.value, 'ping_ct'), fill: false },
-      { label: '联通', color: '#d48806', points: historyNumbers(history.value, 'ping_cu'), fill: false },
-      { label: '移动', color: '#1677ff', points: historyNumbers(history.value, 'ping_cm'), fill: false },
-      { label: '百度', color: '#722ed1', points: historyNumbers(history.value, 'ping_bd'), fill: false },
+    { key: 'latency', title: t('fourNetworkLatency'), current: server.value.latency === null ? t('timeout') : `CT ${raw.ping_ct || '-'} ms`, color: '#eb2f96', unit: ' ms', series: [
+      { label: t('telecom'), color: '#00a88f', points: historyNumbers(history.value, 'ping_ct'), fill: false },
+      { label: t('unicom'), color: '#d48806', points: historyNumbers(history.value, 'ping_cu'), fill: false },
+      { label: t('mobile'), color: '#1677ff', points: historyNumbers(history.value, 'ping_cm'), fill: false },
+      { label: t('baidu'), color: '#722ed1', points: historyNumbers(history.value, 'ping_bd'), fill: false },
     ] },
-    { key: 'loss', title: '丢包率', current: `${raw.loss_ct || 0}%`, color: '#dc2626', unit: '%', series: [
-      { label: '电信', color: '#00a88f', points: historyNumbers(history.value, 'loss_ct'), fill: false },
-      { label: '联通', color: '#d48806', points: historyNumbers(history.value, 'loss_cu'), fill: false },
-      { label: '移动', color: '#1677ff', points: historyNumbers(history.value, 'loss_cm'), fill: false },
-      { label: '百度', color: '#722ed1', points: historyNumbers(history.value, 'loss_bd'), fill: false },
+    { key: 'loss', title: t('packetLoss'), current: `${raw.loss_ct || 0}%`, color: '#dc2626', unit: '%', series: [
+      { label: t('telecom'), color: '#00a88f', points: historyNumbers(history.value, 'loss_ct'), fill: false },
+      { label: t('unicom'), color: '#d48806', points: historyNumbers(history.value, 'loss_cu'), fill: false },
+      { label: t('mobile'), color: '#1677ff', points: historyNumbers(history.value, 'loss_cm'), fill: false },
+      { label: t('baidu'), color: '#722ed1', points: historyNumbers(history.value, 'loss_bd'), fill: false },
     ] },
   ]
   if (gpuDescriptors.value.length) {
     const colors = ['#f38020', '#1677ff', '#722ed1', '#13a8a8', '#d4388c']
     metrics.splice(1, 0, {
       key: 'gpu',
-      title: 'GPU 使用率',
+      title: t('gpuUsage'),
       current: currentGpus.value.map(formatGpuUsage).join(' · ') || 'N/A',
       color: '#f38020',
       unit: '%',
@@ -307,10 +310,10 @@ const historyTimestamps = computed(() => history.value
   .filter((value): value is number => value !== null))
 const rangeStartLabel = computed(() => historyTimestamps.value.length
   ? formatDateTime(Math.min(...historyTimestamps.value))
-  : currentHours.value < 1 ? `${Math.round(currentHours.value * 60)} 分钟前` : `${currentHours.value} 小时前`)
+  : currentHours.value < 1 ? t('minutesAgo', { count: Math.round(currentHours.value * 60) }) : t('hoursAgo', { count: currentHours.value }))
 const rangeEndLabel = computed(() => historyTimestamps.value.length
   ? formatDateTime(Math.max(...historyTimestamps.value))
-  : '现在')
+  : t('now'))
 
 async function loadHistory(hours = currentHours.value) {
   const currentRun = ++historyRun
@@ -323,7 +326,7 @@ async function loadHistory(hours = currentHours.value) {
     if (currentRun !== historyRun) return
     history.value = []
     if (error instanceof ApiRequestError && error.status === 401) loginModalOpen.value = true
-    else historyError.value = error instanceof Error ? error.message : '历史数据加载失败'
+    else historyError.value = error instanceof Error ? error.message : t('historyLoadFailed')
   } finally {
     if (currentRun === historyRun) historyLoading.value = false
   }
@@ -394,8 +397,8 @@ async function loadDetail() {
   } catch (error) {
     if (currentRun !== detailRun) return
     detailError.value = error instanceof ApiRequestError && error.status === 404
-      ? '该节点不存在或已经删除'
-      : error instanceof Error ? error.message : '无法从监控 API 获取该节点'
+      ? t('nodeMissing')
+      : error instanceof Error ? error.message : t('serverLoadFailed')
   } finally {
     if (currentRun === detailRun) loading.value = false
   }
