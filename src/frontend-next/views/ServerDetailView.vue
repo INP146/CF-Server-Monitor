@@ -46,11 +46,15 @@
           <template #title>
             <div class="chart-title-row">
               <span>{{ metric.title }}</span>
-              <strong :style="{ color: metric.color }">{{ metric.current }}</strong>
+              <strong :style="{ color: metric.color }" :title="metric.current">{{ metric.current }}</strong>
             </div>
           </template>
-          <MetricChart :title="metric.title" :series="metric.series" :unit="metric.unit" />
-          <div class="chart-axis"><span>{{ rangeStartLabel }}</span><span>{{ rangeEndLabel }}</span></div>
+          <MetricChart
+            :title="metric.title"
+            :series="metric.series"
+            :unit="metric.unit"
+            :value-format="metric.valueFormat"
+          />
         </a-card>
       </section>
       <a-alert v-if="historyError" type="error" show-icon :message="historyError" />
@@ -110,6 +114,7 @@ import type { DashboardServer, HistoryRecord, LiveSocketController } from '../ty
 import { ApiRequestError, createLiveSocket, fetchAllHistory, fetchServerDetail, isAdminLoggedIn } from '../utils/api'
 import { normalizeApiIndex } from '../utils/auth'
 import { formatBytes, toNumber } from '../utils/format'
+import { isDisabledProbeMetric } from '../utils/server'
 import { formatDateTime, normalizeTimestamp } from '../utils/time'
 import { historyLoad, historyNumbers, historyPercents, toDisplayServer, type MetricPoint } from '../utils/view-model'
 import { currentLanguage, t } from '../utils/i18n'
@@ -204,10 +209,34 @@ function formatGpuUsage(gpu: GpuInfo): string {
   return `${gpu.name || 'GPU'} ${Number.isFinite(value) ? `${value.toFixed(1)}%` : 'N/A'}`
 }
 
-const scalePoints = (points: MetricPoint[], divisor: number): MetricPoint[] => points.map((point) => ({
-  ...point,
-  value: point.value === null ? null : point.value / divisor,
-}))
+const probeDefinitions = [
+  { key: 'ct', label: 'telecom', color: '#00a88f' },
+  { key: 'cu', label: 'unicom', color: '#d48806' },
+  { key: 'cm', label: 'mobile', color: '#1677ff' },
+  { key: 'bd', label: 'baidu', color: '#722ed1' },
+] as const
+
+function probeSeries(raw: DashboardServer, metric: 'ping' | 'loss') {
+  return probeDefinitions
+    .filter((probe) => !isDisabledProbeMetric(raw[`ping_${probe.key}`]))
+    .map((probe) => ({
+      label: t(probe.label),
+      color: probe.color,
+      points: historyNumbers(history.value, `${metric}_${probe.key}`),
+      fill: false,
+    }))
+}
+
+function probeCurrent(raw: DashboardServer, metric: 'ping' | 'loss'): string {
+  const unit = metric === 'ping' ? 'ms' : '%'
+  const values = probeDefinitions
+    .filter((probe) => !isDisabledProbeMetric(raw[`ping_${probe.key}`]))
+    .map((probe) => {
+      const value = Number.parseFloat(String(raw[`${metric}_${probe.key}`] ?? ''))
+      return `${probe.key.toUpperCase()} ${Number.isFinite(value) ? `${Number(value.toFixed(1))}${unit}` : '-'}`
+    })
+  return values.join(' · ') || t('noData')
+}
 
 const summaryItems = computed(() => {
   if (!server.value) return []
@@ -252,44 +281,34 @@ const chartMetrics = computed(() => {
   const raw = rawServer.value
   const loadValues = server.value.load.split('/').map((value) => Number.parseFloat(value.trim()) || 0)
   const metrics = [
-    { key: 'cpu', title: t('cpuUsage'), current: `${server.value.cpu}%`, color: '#00a88f', unit: '%', series: [
+    { key: 'cpu', title: t('cpuUsage'), current: `${server.value.cpu}%`, color: '#00a88f', unit: '%', valueFormat: 'number' as const, series: [
       { label: 'CPU', color: '#00a88f', points: historyNumbers(history.value, 'cpu') },
     ] },
-    { key: 'load', title: t('systemLoad'), current: loadValues[0]?.toFixed(2) || '0.00', color: '#1677ff', unit: '', series: [
+    { key: 'load', title: t('systemLoad'), current: loadValues[0]?.toFixed(2) || '0.00', color: '#1677ff', unit: '', valueFormat: 'number' as const, series: [
       { label: '1m', color: '#00a88f', points: historyLoad(history.value, 0), fill: false },
       { label: '5m', color: '#d48806', points: historyLoad(history.value, 1), fill: false },
       { label: '15m', color: '#1677ff', points: historyLoad(history.value, 2), fill: false },
     ] },
-    { key: 'memory', title: t('memoryUsage'), current: `${server.value.memory}%`, color: '#722ed1', unit: '%', series: [
+    { key: 'memory', title: t('memoryUsage'), current: `${server.value.memory}%`, color: '#722ed1', unit: '%', valueFormat: 'number' as const, series: [
       { label: t('memory'), color: '#722ed1', points: historyPercents(history.value, 'ram_used', 'ram_total') },
       { label: 'Swap', color: '#f38020', points: historyPercents(history.value, 'swap_used', 'swap_total') },
     ] },
-    { key: 'disk', title: t('diskUsage'), current: `${server.value.disk}%`, color: '#13a8a8', unit: '%', series: [
+    { key: 'disk', title: t('diskUsage'), current: `${server.value.disk}%`, color: '#13a8a8', unit: '%', valueFormat: 'number' as const, series: [
       { label: t('disk'), color: '#13a8a8', points: historyPercents(history.value, 'disk_used', 'disk_total') },
     ] },
-    { key: 'network', title: t('networkThroughput'), current: `↓ ${server.value.download} / ↑ ${server.value.upload}`, color: '#16a34a', unit: ' KB/s', series: [
-      { label: t('downstream'), color: '#00a88f', points: scalePoints(historyNumbers(history.value, 'net_in_speed'), 1024) },
-      { label: t('upstream'), color: '#1677ff', points: scalePoints(historyNumbers(history.value, 'net_out_speed'), 1024) },
+    { key: 'network', title: t('networkThroughput'), current: `↓ ${server.value.download} / ↑ ${server.value.upload}`, color: '#16a34a', unit: '', valueFormat: 'bytes-per-second' as const, series: [
+      { label: t('downstream'), color: '#00a88f', points: historyNumbers(history.value, 'net_in_speed') },
+      { label: t('upstream'), color: '#1677ff', points: historyNumbers(history.value, 'net_out_speed') },
     ] },
-    { key: 'process', title: t('processes'), current: String(raw.processes || 0), color: '#d4388c', unit: '', series: [
+    { key: 'process', title: t('processes'), current: String(raw.processes || 0), color: '#d4388c', unit: '', valueFormat: 'number' as const, series: [
       { label: t('process'), color: '#d4388c', points: historyNumbers(history.value, 'processes') },
     ] },
-    { key: 'connections', title: t('connections'), current: `TCP ${raw.tcp_conn || 0} · UDP ${raw.udp_conn || 0}`, color: '#2f54eb', unit: '', series: [
+    { key: 'connections', title: t('connections'), current: `TCP ${raw.tcp_conn || 0} · UDP ${raw.udp_conn || 0}`, color: '#2f54eb', unit: '', valueFormat: 'number' as const, series: [
       { label: 'TCP', color: '#2f54eb', points: historyNumbers(history.value, 'tcp_conn'), fill: false },
       { label: 'UDP', color: '#d4388c', points: historyNumbers(history.value, 'udp_conn'), fill: false },
     ] },
-    { key: 'latency', title: t('fourNetworkLatency'), current: server.value.latency === null ? t('timeout') : `CT ${raw.ping_ct || '-'} ms`, color: '#eb2f96', unit: ' ms', series: [
-      { label: t('telecom'), color: '#00a88f', points: historyNumbers(history.value, 'ping_ct'), fill: false },
-      { label: t('unicom'), color: '#d48806', points: historyNumbers(history.value, 'ping_cu'), fill: false },
-      { label: t('mobile'), color: '#1677ff', points: historyNumbers(history.value, 'ping_cm'), fill: false },
-      { label: t('baidu'), color: '#722ed1', points: historyNumbers(history.value, 'ping_bd'), fill: false },
-    ] },
-    { key: 'loss', title: t('packetLoss'), current: `${raw.loss_ct || 0}%`, color: '#dc2626', unit: '%', series: [
-      { label: t('telecom'), color: '#00a88f', points: historyNumbers(history.value, 'loss_ct'), fill: false },
-      { label: t('unicom'), color: '#d48806', points: historyNumbers(history.value, 'loss_cu'), fill: false },
-      { label: t('mobile'), color: '#1677ff', points: historyNumbers(history.value, 'loss_cm'), fill: false },
-      { label: t('baidu'), color: '#722ed1', points: historyNumbers(history.value, 'loss_bd'), fill: false },
-    ] },
+    { key: 'latency', title: t('fourNetworkLatency'), current: probeCurrent(raw, 'ping'), color: '#eb2f96', unit: ' ms', valueFormat: 'number' as const, series: probeSeries(raw, 'ping') },
+    { key: 'loss', title: t('packetLoss'), current: probeCurrent(raw, 'loss'), color: '#dc2626', unit: '%', valueFormat: 'number' as const, series: probeSeries(raw, 'loss') },
   ]
   if (gpuDescriptors.value.length) {
     const colors = ['#f38020', '#1677ff', '#722ed1', '#13a8a8', '#d4388c']
@@ -299,21 +318,12 @@ const chartMetrics = computed(() => {
       current: currentGpus.value.map(formatGpuUsage).join(' · ') || 'N/A',
       color: '#f38020',
       unit: '%',
+      valueFormat: 'number' as const,
       series: gpuDescriptors.value.map((gpu, index) => ({ label: gpu.label, color: colors[index % colors.length]!, points: gpuPoints(gpu) })),
     })
   }
   return metrics
 })
-
-const historyTimestamps = computed(() => history.value
-  .map((record) => normalizeTimestamp(record.timestamp))
-  .filter((value): value is number => value !== null))
-const rangeStartLabel = computed(() => historyTimestamps.value.length
-  ? formatDateTime(Math.min(...historyTimestamps.value))
-  : currentHours.value < 1 ? t('minutesAgo', { count: Math.round(currentHours.value * 60) }) : t('hoursAgo', { count: currentHours.value }))
-const rangeEndLabel = computed(() => historyTimestamps.value.length
-  ? formatDateTime(Math.max(...historyTimestamps.value))
-  : t('now'))
 
 async function loadHistory(hours = currentHours.value) {
   const currentRun = ++historyRun

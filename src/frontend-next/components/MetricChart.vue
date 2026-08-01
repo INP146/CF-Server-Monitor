@@ -2,23 +2,20 @@
   <div class="metric-chart" :class="{ 'is-empty': !hasValues }">
     <template v-if="hasValues">
       <div v-if="displaySeries.length > 1" class="metric-chart-legend" :aria-label="t('chartLegend')">
-        <span v-for="item in displaySeries" :key="item.label">
-          <i :style="{ background: item.color }" />{{ item.label }}
-        </span>
+        <button
+          v-for="(item, index) in displaySeries"
+          :key="`${item.label}-${index}`"
+          type="button"
+          :class="{ 'is-hidden': hiddenSeries.has(index) }"
+          :aria-pressed="!hiddenSeries.has(index)"
+          @click="toggleSeries(index)"
+        >
+          <i :style="{ background: item.color }" />
+          <span>{{ item.label }}</span>
+        </button>
       </div>
-      <div class="metric-chart-plot">
-        <div class="metric-chart-y-axis" aria-hidden="true">
-          <span v-for="tick in tickLabels" :key="tick">{{ tick }}</span>
-        </div>
-        <svg viewBox="0 0 320 92" preserveAspectRatio="none" role="img" :aria-label="t('trendChart', { title })">
-          <line v-for="y in [10, 46, 82]" :key="y" x1="0" :y1="y" x2="320" :y2="y" class="chart-grid-line" />
-          <template v-for="item in plottedSeries" :key="item.label">
-            <template v-for="(segment, index) in item.segments" :key="`${item.label}-${index}`">
-              <polygon v-if="item.fill && segment.areaPoints" :points="segment.areaPoints" :fill="`${item.color}0D`" />
-              <polyline :points="segment.linePoints" fill="none" :stroke="item.color" stroke-width="1.5" vector-effect="non-scaling-stroke" />
-            </template>
-          </template>
-        </svg>
+      <div class="metric-chart-canvas">
+        <canvas ref="canvasRef" role="img" :aria-label="t('trendChart', { title })" />
       </div>
     </template>
     <span v-else>{{ t('noData') }}</span>
@@ -26,15 +23,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import Chart from 'chart.js/auto'
+import type { ChartDataset, ChartOptions, Plugin, TooltipItem } from 'chart.js'
+import 'chartjs-adapter-date-fns'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+
+import { resolvedTheme } from '../composables/useTheme'
+import {
+  formatChartTimestamp,
+  formatChartTimeTick,
+  formatChartValue,
+  getChartTimeUnit,
+  insertChartGapBreaks,
+  type ChartPoint,
+  type ChartValueFormat,
+} from '../utils/chart'
 import { t } from '../utils/i18n'
 
 interface ChartSeries {
   label: string
-  points: Array<{ timestamp: number; value: number | null }>
+  points: ChartPoint[]
   color: string
   fill?: boolean
 }
+
+type CanvasPoint = { x: number; y: number | null }
 
 const props = withDefaults(defineProps<{
   title: string
@@ -42,12 +55,18 @@ const props = withDefaults(defineProps<{
   color?: string
   unit?: string
   series?: ChartSeries[]
+  valueFormat?: ChartValueFormat
 }>(), {
   values: () => [],
   color: '#1677ff',
   unit: '',
   series: () => [],
+  valueFormat: 'number',
 })
+
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+const hiddenSeries = ref(new Set<number>())
+let chart: Chart<'line', CanvasPoint[]> | null = null
 
 const displaySeries = computed<ChartSeries[]>(() => props.series.length ? props.series : [{
   label: props.title,
@@ -64,63 +83,165 @@ const timestampRange = computed(() => {
   const timestamps = displaySeries.value
     .flatMap((item) => item.points.map((point) => point.timestamp))
     .filter(Number.isFinite)
-  if (!timestamps.length) return { min: 0, max: 0 }
-  return {
-    min: Math.min(...timestamps),
-    max: Math.max(...timestamps),
-  }
+  if (!timestamps.length) return { min: 0, max: 0, duration: 0 }
+  const min = Math.min(...timestamps)
+  const max = Math.max(...timestamps)
+  return { min, max, duration: max - min }
 })
 
-function niceCeiling(value: number) {
-  const safeValue = Math.max(value, 0.1)
-  const magnitude = 10 ** Math.floor(Math.log10(safeValue))
-  const normalized = safeValue / magnitude
-  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10
-  return step * magnitude
+const hoverLine: Plugin<'line'> = {
+  id: 'metric-hover-line',
+  afterDraw(currentChart) {
+    const active = currentChart.tooltip?.getActiveElements()
+    if (!active?.length) return
+    const x = active[0]!.element.x
+    const { ctx, chartArea } = currentChart
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(x, chartArea.top)
+    ctx.lineTo(x, chartArea.bottom)
+    ctx.lineWidth = 1
+    ctx.strokeStyle = resolvedTheme.value === 'dark' ? 'rgba(255, 255, 255, 0.22)' : 'rgba(0, 0, 0, 0.18)'
+    ctx.stroke()
+    ctx.restore()
+  },
 }
 
-const scaleMax = computed(() => niceCeiling(Math.max(...allValues.value, 0) * 1.08))
-
-function formatTick(value: number) {
-  let output: string
-  if (value >= 1000) output = `${Number((value / 1000).toFixed(1))}k`
-  else if (value > 0 && value < 1) output = String(Number(value.toFixed(2)))
-  else output = String(Number(value.toFixed(1)))
-  return `${output}${props.unit}`
+function createDatasets(): ChartDataset<'line', CanvasPoint[]>[] {
+  return displaySeries.value.map((item, index) => ({
+    label: item.label,
+    data: insertChartGapBreaks(item.points, timestampRange.value.duration).map((point) => ({
+      x: point.timestamp,
+      y: point.value,
+    })),
+    borderColor: item.color,
+    backgroundColor: item.fill === false ? 'transparent' : `${item.color}14`,
+    fill: item.fill !== false,
+    hidden: hiddenSeries.value.has(index),
+    borderWidth: 1.75,
+    pointRadius: 0,
+    pointHoverRadius: 4,
+    pointHitRadius: 12,
+    spanGaps: false,
+    tension: 0.28,
+  }))
 }
 
-const tickLabels = computed(() => [scaleMax.value, scaleMax.value / 2, 0].map(formatTick))
-
-const plottedSeries = computed(() => displaySeries.value.map((series) => {
-  const duration = timestampRange.value.max - timestampRange.value.min
-  const segments: Array<Array<{ x: number; y: number }>> = []
-  let current: Array<{ x: number; y: number }> = []
-
-  for (const point of series.points) {
-    if (point.value === null || !Number.isFinite(point.value) || !Number.isFinite(point.timestamp)) {
-      if (current.length) segments.push(current)
-      current = []
-      continue
-    }
-    current.push({
-      x: duration > 0 ? (point.timestamp - timestampRange.value.min) / duration * 320 : 160,
-      y: 82 - Math.max(0, point.value) / scaleMax.value * 72,
-    })
-  }
-  if (current.length) segments.push(current)
+function createOptions(): ChartOptions<'line'> {
+  const isDark = resolvedTheme.value === 'dark'
+  const axisColor = isDark ? '#a3a3a3' : '#737373'
+  const gridColor = isDark ? 'rgba(255, 255, 255, 0.075)' : 'rgba(0, 0, 0, 0.065)'
+  const duration = timestampRange.value.duration
 
   return {
-    ...series,
-    fill: series.fill !== false,
-    segments: segments.map((points) => {
-      const linePoints = points.map(({ x, y }) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
-      return {
-        linePoints,
-        areaPoints: points.length > 1
-          ? `${points[0]!.x.toFixed(1)},82 ${linePoints} ${points.at(-1)!.x.toFixed(1)},82`
-          : '',
-      }
-    }),
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: { duration: 180 },
+    normalized: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        displayColors: true,
+        backgroundColor: isDark ? 'rgba(20, 20, 20, 0.96)' : 'rgba(255, 255, 255, 0.98)',
+        titleColor: isDark ? '#f5f5f5' : '#262626',
+        bodyColor: isDark ? '#d4d4d4' : '#525252',
+        borderColor: isDark ? '#404040' : '#d9d9d9',
+        borderWidth: 1,
+        cornerRadius: 4,
+        padding: 10,
+        callbacks: {
+          title(items: TooltipItem<'line'>[]) {
+            const timestamp = items[0]?.parsed.x
+            return typeof timestamp === 'number' ? formatChartTimestamp(timestamp) : ''
+          },
+          label(item: TooltipItem<'line'>) {
+            const value = item.parsed.y
+            const formatted = typeof value === 'number'
+              ? formatChartValue(value, props.unit, props.valueFormat)
+              : t('noData')
+            return `${item.dataset.label || props.title}: ${formatted}`
+          },
+        },
+      },
+    },
+    scales: {
+      x: {
+        type: 'time',
+        min: timestampRange.value.min,
+        max: timestampRange.value.max,
+        time: { unit: getChartTimeUnit(duration) },
+        grid: { color: gridColor, tickLength: 0 },
+        border: { display: false },
+        ticks: {
+          color: axisColor,
+          maxTicksLimit: 6,
+          maxRotation: 0,
+          autoSkipPadding: 16,
+          padding: 8,
+          font: { size: 10 },
+          callback(value) {
+            return formatChartTimeTick(Number(value), duration)
+          },
+        },
+      },
+      y: {
+        beginAtZero: true,
+        grace: '8%',
+        grid: { color: gridColor, tickLength: 0 },
+        border: { display: false },
+        ticks: {
+          color: axisColor,
+          maxTicksLimit: 5,
+          padding: 8,
+          font: { size: 10 },
+          callback(value) {
+            return formatChartValue(Number(value), props.unit, props.valueFormat)
+          },
+        },
+      },
+    },
   }
-}))
+}
+
+function destroyChart() {
+  chart?.destroy()
+  chart = null
+}
+
+function syncChart() {
+  if (!hasValues.value || !canvasRef.value) {
+    destroyChart()
+    return
+  }
+  if (!chart) {
+    chart = new Chart<'line', CanvasPoint[]>(canvasRef.value, {
+      type: 'line',
+      data: { datasets: createDatasets() },
+      options: createOptions(),
+      plugins: [hoverLine],
+    })
+    return
+  }
+  chart.data.datasets = createDatasets()
+  chart.options = createOptions()
+  chart.update('none')
+}
+
+function toggleSeries(index: number) {
+  const next = new Set(hiddenSeries.value)
+  if (next.has(index)) next.delete(index)
+  else next.add(index)
+  hiddenSeries.value = next
+  chart?.setDatasetVisibility(index, !next.has(index))
+  chart?.update()
+}
+
+watch(
+  () => [props.title, props.unit, props.valueFormat, props.series, props.values, resolvedTheme.value],
+  () => { void nextTick(syncChart) },
+  { deep: true, flush: 'post' },
+)
+onMounted(() => { void nextTick(syncChart) })
+onBeforeUnmount(destroyChart)
 </script>

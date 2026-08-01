@@ -77,6 +77,8 @@ a.ant-btn:active {
 .dashboard-main {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .app-header {
@@ -153,9 +155,12 @@ a.ant-btn:active {
 }
 
 .dashboard-content {
+  flex: 1;
   width: min(100%, 1440px);
   margin: 0 auto;
   padding: 28px;
+  display: flex;
+  flex-direction: column;
 }
 
 .summary-grid {
@@ -232,7 +237,11 @@ a.ant-btn:active {
 .status-dot.offline { background: var(--red); }
 
 .fleet-section {
+  min-height: 0;
   margin-top: 32px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
 }
 
 .fleet-toolbar {
@@ -591,6 +600,13 @@ a.ant-btn:active {
 
 .empty-result {
   padding: 64px 20px;
+}
+
+.dashboard-loading {
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  flex: 1;
 }
 
 .login-page {
@@ -1090,11 +1106,19 @@ a.ant-btn:active {
 .chart-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .chart-card .ant-card-head {
-  min-height: 48px;
+  min-height: 44px;
+}
+
+.chart-card .ant-card-head-title {
+  padding: 10px 0;
+}
+
+.chart-card .ant-card-body {
+  padding: 8px 12px 12px;
 }
 
 .chart-title-row {
@@ -1114,7 +1138,8 @@ a.ant-btn:active {
 }
 
 .metric-chart {
-  height: 180px;
+  height: 230px;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   color: var(--text-secondary);
@@ -1127,70 +1152,64 @@ a.ant-btn:active {
 }
 
 .metric-chart-legend {
-  min-height: 24px;
+  min-height: 28px;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: flex-end;
   flex-wrap: wrap;
-  gap: 5px 12px;
+  gap: 4px 6px;
   color: var(--text-secondary);
-  font-size: 10px;
 }
 
-.metric-chart-legend span {
+.metric-chart-legend button {
+  min-width: 0;
+  height: 24px;
+  padding: 0 6px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  border: 0;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font-size: 10px;
   white-space: nowrap;
 }
 
+.metric-chart-legend button:hover,
+.metric-chart-legend button:focus-visible {
+  color: var(--text);
+  background: var(--layout-bg);
+  outline: none;
+}
+
+.metric-chart-legend button.is-hidden {
+  opacity: 0.42;
+}
+
 .metric-chart-legend i {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
   display: inline-block;
+  flex: 0 0 auto;
   border-radius: 50%;
 }
 
-.metric-chart-plot {
+.metric-chart-canvas {
   min-height: 0;
-  display: grid;
-  grid-template-columns: 38px minmax(0, 1fr);
+  position: relative;
   flex: 1;
 }
 
-.metric-chart-y-axis {
-  padding: 0 8px 0 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  flex-direction: column;
-  color: var(--text-secondary);
-  font-size: 9px;
-  line-height: 1;
-}
-
-.metric-chart svg {
+.metric-chart-canvas canvas {
+  display: block;
   width: 100%;
-  height: 100%;
+  height: 100% !important;
   min-height: 0;
-  overflow: hidden;
 }
 
-.chart-grid-line {
-  stroke: var(--border);
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-
-.chart-axis {
-  padding-left: 38px;
-  display: flex;
-  justify-content: space-between;
-  color: var(--text-secondary);
-  font-size: 10px;
-}
-
-@media (max-width: 1200px) {
+@media (max-width: 900px) {
   .chart-grid {
     grid-template-columns: 1fr;
   }

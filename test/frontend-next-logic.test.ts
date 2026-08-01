@@ -50,6 +50,11 @@ import { http } from '../src/frontend-next/utils/http'
 import { normalizeLiveSocketScope } from '../src/frontend-next/utils/live-socket'
 import { currentLanguage, t } from '../src/frontend-next/utils/i18n'
 import { resolveTheme } from '../src/frontend-next/composables/useTheme'
+import {
+  formatChartValue,
+  getChartTimeUnit,
+  insertChartGapBreaks,
+} from '../src/frontend-next/utils/chart'
 
 test('normalizes legacy display mode values', () => {
   assert.equal(normalizeDisplayMode('list'), 'table')
@@ -540,4 +545,21 @@ test('creates stable bounded metric samples for static charts', () => {
   assert.equal(samples.length, 12)
   assert.ok(samples.every((value) => value >= 0))
   assert.deepEqual(samples, createMetricSeries(2, 25, 5, 12))
+})
+
+test('formats chart scales and preserves missing history gaps', () => {
+  assert.equal(getChartTimeUnit(3 * 60 * 60 * 1_000), 'minute')
+  assert.equal(getChartTimeUnit(24 * 60 * 60 * 1_000), 'hour')
+  assert.equal(getChartTimeUnit(7 * 24 * 60 * 60 * 1_000), 'day')
+  assert.equal(formatChartValue(1536, '', 'bytes-per-second'), '1.5 KB/s')
+  assert.equal(formatChartValue(42.125, ' ms'), '42.1 ms')
+
+  const start = 1_700_000_000_000
+  const points = insertChartGapBreaks([
+    { timestamp: start, value: 10 },
+    { timestamp: start + 60_000, value: 20 },
+    { timestamp: start + 10 * 60_000, value: 30 },
+  ], 10 * 60_000)
+  assert.equal(points.length, 4)
+  assert.equal(points[2]?.value, null)
 })
