@@ -43,7 +43,6 @@ export function toDisplayServer(server: DashboardServer, now = Date.now(), apiIn
     : server.ip_v6 && server.ip_v6 !== '0'
       ? server.ip_v6
       : '-')
-
   return {
     id: server.id,
     name: String(server.name || server.id),

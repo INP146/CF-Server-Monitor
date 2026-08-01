@@ -60,21 +60,21 @@
 
     <a-divider />
 
-    <div class="network-grid">
-      <div>
-        <span><DownloadOutlined /> {{ t('download') }}</span>
-        <strong>{{ server.download }}</strong>
-      </div>
-      <div>
-        <span><UploadOutlined /> {{ t('upload') }}</span>
-        <strong>{{ server.upload }}</strong>
-      </div>
-      <div>
-        <span><WifiOutlined /> {{ t('latency') }}</span>
-        <strong :class="latencyClass">{{ server.latency === null ? t('timeout') : `${server.latency} ms` }}</strong>
-      </div>
-    </div>
-
+    <a-descriptions
+      class="server-telemetry"
+      size="small"
+      layout="horizontal"
+      :column="{ xs: 1, sm: 2 }"
+    >
+      <a-descriptions-item>
+        <template #label><span class="telemetry-label"><DownloadOutlined />{{ t('download') }}</span></template>
+        <a-typography-text strong>{{ server.download }}</a-typography-text>
+      </a-descriptions-item>
+      <a-descriptions-item>
+        <template #label><span class="telemetry-label"><UploadOutlined />{{ t('upload') }}</span></template>
+        <a-typography-text strong>{{ server.upload }}</a-typography-text>
+      </a-descriptions-item>
+    </a-descriptions>
 
     <div v-if="config.show_tf" class="traffic-usage-row">
       <span>{{ t('monthlyTraffic') }} {{ server.trafficUsed || '0 B' }} / {{ displayTrafficLimit }}</span>
@@ -103,15 +103,16 @@ import { useRouter } from 'vue-router'
 import AButton from 'ant-design-vue/es/button'
 import ABadge from 'ant-design-vue/es/badge'
 import ACard from 'ant-design-vue/es/card'
+import ADescriptions, { DescriptionsItem as ADescriptionsItem } from 'ant-design-vue/es/descriptions'
 import ADivider from 'ant-design-vue/es/divider'
 import AProgress from 'ant-design-vue/es/progress'
 import ATag from 'ant-design-vue/es/tag'
+import { TypographyText as ATypographyText } from 'ant-design-vue/es/typography'
 import {
   ClockCircleOutlined,
   DownloadOutlined,
   RightOutlined,
   UploadOutlined,
-  WifiOutlined,
 } from '@ant-design/icons-vue'
 
 import type { MockServer } from '../data/dashboard'
@@ -139,12 +140,6 @@ const metrics = computed(() => [
 const displayTrafficLimit = computed(() => props.server.trafficLimitText && props.server.trafficLimitText !== '不限'
   ? props.server.trafficLimitText
   : t('unlimited'))
-
-const latencyClass = computed(() => {
-  if (props.server.latency === null || props.server.latency >= 180) return 'metric-danger'
-  if (props.server.latency >= 100) return 'metric-warning'
-  return 'metric-healthy'
-})
 
 function metricColor(value: number): string {
   if (value >= 85) return '#dc2626'

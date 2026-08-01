@@ -525,42 +525,36 @@ a.ant-btn:active {
   margin: 17px 0;
 }
 
-.network-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+.server-telemetry .ant-descriptions-view {
+  width: 100%;
 }
 
-.network-grid > div {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.network-grid span {
-  display: flex;
-  align-items: center;
-  gap: 5px;
+.server-telemetry .ant-descriptions-item-label {
+  padding-bottom: 0;
   color: var(--text-secondary);
   font-size: 11px;
-}
-
-.network-grid strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.network-grid .metric-healthy { color: var(--green); }
-.network-grid .metric-warning { color: var(--yellow); }
-.network-grid .metric-danger { color: var(--red); }
+.server-telemetry .ant-descriptions-item-content {
+  min-width: 0;
+  padding-bottom: 0;
+  font-size: 13px;
+}
+
+.server-telemetry .ant-descriptions-row > th,
+.server-telemetry .ant-descriptions-row > td {
+  padding-bottom: 0;
+}
+
+.telemetry-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
 
 .traffic-usage-row {
-  margin-top: 14px;
+  margin-top: 12px;
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(80px, 1fr);
   align-items: center;
@@ -1775,9 +1769,6 @@ a.ant-btn:active {
     flex-direction: column;
   }
 
-  .network-grid {
-    gap: 8px;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
