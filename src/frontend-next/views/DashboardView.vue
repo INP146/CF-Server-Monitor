@@ -69,7 +69,7 @@
                     <div><a-progress type="circle" :size="84" :percent="server.memory" :stroke-color="metricColor(server.memory)" /><span>{{ t('memory') }}</span></div>
                     <div><a-progress type="circle" :size="84" :percent="server.disk" :stroke-color="metricColor(server.disk)" /><span>{{ t('disk') }}</span></div>
                   </div>
-                  <div class="ring-card-foot"><span>{{ server.location }}</span><span>{{ server.latency === null ? t('timeout') : `${server.latency} ms` }}</span></div>
+                  <div class="ring-card-foot"><span>{{ server.location }}</span></div>
                   <div v-if="serverConfig(server).show_tf || serverConfig(server).show_time" class="ring-card-status">
                     <span v-if="serverConfig(server).show_tf">{{ t('monthlyTraffic') }} {{ server.trafficUsed }} / {{ server.trafficLimitText === '不限' ? t('unlimited') : server.trafficLimitText }}</span>
                     <span v-if="serverConfig(server).show_time">{{ server.dataTime }}</span>
@@ -88,7 +88,6 @@
               <template v-else-if="column.key === 'network'"><span class="mono-text">↓ {{ record.download }} · ↑ {{ record.upload }}</span></template>
               <template v-else-if="column.key === 'billing'"><span class="table-meta-stack"><span v-if="serverConfig(record).show_price">{{ record.priceText || '-' }}</span><small v-if="serverConfig(record).show_expire">{{ record.expireDate || t('noExpiry') }}</small></span></template>
               <template v-else-if="column.key === 'traffic'"><span v-if="serverConfig(record).show_tf" class="table-meta-stack"><span>{{ record.trafficUsed }}</span><small>{{ record.trafficLimitText }}</small></span></template>
-              <template v-else-if="column.key === 'latency'">{{ record.latency === null ? t('timeout') : `${record.latency} ms` }}</template>
               <template v-else-if="column.key === 'updated'"><span v-if="serverConfig(record).show_time">{{ record.dataTime }}</span></template>
               <template v-else-if="column.key === 'status'"><a-badge :status="record.status === 'online' ? 'success' : 'error'" :text="record.status === 'online' ? t('online') : t('offline')" /></template>
             </template>
@@ -223,7 +222,6 @@ const tableColumns = computed(() => [
     ? [{ title: t('billingExpiry'), key: 'billing', width: 150 }]
     : []),
   ...(hasVisibleSetting('show_tf') ? [{ title: t('monthlyTraffic'), key: 'traffic', width: 140 }] : []),
-  { title: t('latency'), key: 'latency', width: 90 },
   ...(hasVisibleSetting('show_time') ? [{ title: t('dataTime'), key: 'updated', width: 180 }] : []),
   { title: t('status'), key: 'status', width: 90 },
 ])
